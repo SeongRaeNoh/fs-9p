@@ -62,7 +62,7 @@ workflow below ran in this repository's tests or demos ([log of each number](doc
 | Coverage and core files on the host | the guest writes the `.gcda` files into the host build folder (gcovr: 88 % of the lines and 76 % of the branches of `cJSON.c`) and a crashed program's core file into the share, where the SDP's `ntox86_64-gdb` reads it |
 | A team's test machine | `tools/qnx-ci.sh "$IMAGE" "$SHARE" PROJECT...` boots the guest, runs each project's ctest suite in it, writes JUnit files (with gdb's backtrace for a crashed test) and gcovr reports, and stops the guest |
 | Coding agents | `tools/qnx-run --json` prints one JSON line per run; [AGENTS.md](AGENTS.md) lists the commands; a [recorded session](examples/ai-agent-session-libxml2/) shows a fresh agent fixing the libxml2 bug below |
-| Host-only tests, no SDP | `make host-check`: table tests and a fuzz run of the 9P codec with host gcc; `.github/workflows/host-tests.yml` runs the same command on GitHub Actions (not run there yet) |
+| Host-only tests, no SDP | `make host-check`: table tests and a fuzz run of the 9P codec with host gcc; `.github/workflows/host-tests.yml` runs the same command on GitHub Actions ([first run, 2026-11-21: passed](https://github.com/SeongRaeNoh/fs-9p/actions/runs/44883385393)) |
 
 Projects under ISO 26262 or IEC 62304 collect structural coverage as test evidence; with fs-9p it comes
 from test runs on the QNX kernel. fs-9p is a development and test tool, not a qualified tool, and claims no conformance with either standard.
