@@ -1,0 +1,21 @@
+# fs-9p guest tests, 2026-11-13, sources sha256 ac061f948768 (tests/srchash.sh)
+=== image/fs-9p-supervise: automatic restart after slay -9, and the restart limit (FS9P_RESTART_MAX, FS9P_RESTART_WINDOW)
+  limit start: mounted
+  limit kill 1: new fs-9p, mounted
+  limit kill 2: new fs-9p, mounted
+  limit kill 3: no new fs-9p
+  limit: fs-9p processes after kill 3: 0
+  fs-9p-supervise: fs-9p ended by signal 9; starting it again (restart 1)
+  fs-9p-supervise: fs-9p ended by signal 9; starting it again (restart 2)
+  fs-9p-supervise: fs-9p ended by signal 9; not started again: 2 restarts in the last 10 s (limit FS9P_RESTART_MAX=2 in FS9P_RESTART_WINDOW=10 s)
+  window start: mounted
+  window kill 1: new fs-9p, mounted
+  window kill 2: new fs-9p, mounted
+  window kill 3: no new fs-9p
+  window: fs-9p processes after kill 3: 0
+  fs-9p-supervise: fs-9p ended by signal 9; starting it again (restart 1)
+  fs-9p-supervise: fs-9p ended by signal 9; starting it again (restart 2)
+  fs-9p-supervise: fs-9p ended by signal 9; not started again: 1 restarts in the last 10 s (limit FS9P_RESTART_MAX=1 in FS9P_RESTART_WINDOW=10 s)
+PASS: fs-9p-supervise: after each of 2 kills a new fs-9p mounted the share without a typed command
+PASS: restart limit: the third kill within 10 s is not followed by a restart, and the reason is printed
+PASS: restart window: a restart older than 10 s no longer counts (limit 1: kill, 11 s, kill restarts, kill stops)

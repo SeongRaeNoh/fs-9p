@@ -1,0 +1,660 @@
+# fs-9p guest tests, 2026-11-12T07:53:16+09:00, sources sha256 eece8504da34 (tests/srchash.sh)
+
+=== build (QNX SDP 8.0, qcc)
+toolchain: Toolchain:  12.2.0	Version:  gcc_ntox86_64
+QEMU: QEMU emulator version 6.2.0 (Debian 1:6.2+dfsg-2ubuntu6.31)
+host OS: Ubuntu 22.04.5 LTS
+  mkdir -p build
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build/fs-9p src/fs9p.c src/virtio_pci.c src/virtq.c src/p9.c src/p9_errno.c -lpci
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build/v9p_probe tools/v9p_probe.c src/virtio_pci.c src/virtq.c src/p9.c src/p9_errno.c -lpci
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build/errno_test tests/errno_test.c src/p9_errno.c
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build/attr_test tests/attr_test.c
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build/link_test tests/link_test.c
+PASS: build
+
+=== host test tree in SHARE/tree
+host tree: 191 files, 32 directories, 14M
+big file.bin: 12595257 bytes, md5 120473e2f90846afff2c09abcfd52c45
+
+=== guest
+QNX qnxqemu 8.0.0 2026/06/05-16:26:03EDT x86pc x86_64
+uid=0(root) gid=0(root) groups=0(root)
+PASS: copy programs to the guest
+
+=== errno table test (Linux errno in Rlerror -> QNX errno)
+rows ok: 38
+errno_test: 117 table rows, 155 checks, 0 failures
+RESULT: errno table test passed
+PASS: errno table test
+
+=== probe (v9p_probe: Tversion/Rversion exchange, legacy interface, polling)
+Tversion (21 bytes):
+    15 00 00 00 64 ff ff 00 20 00 00 08 00 39 50 32 30 30 30 2e 4c
+9P: Tversion  -> Rversion size=21 tag=0xffff used.len=21
+    reply (21 bytes):
+    15 00 00 00 65 ff ff 00 20 00 00 08 00 39 50 32 30 30 30 2e 4c
+    Rversion msize=8192 version="9P2000.L"
+RESULT: Tversion/Rversion exchange completed
+PASS: probe
+
+=== mount: fs-9p -d -v -m /mnt/host
+exit=0
+PASS: mount
+fs-9p: 9P2000.L, msize 135168, mount tag "hostshare", legacy interface, interrupt-driven
+fs-9p 0.9.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+total 25184
+-rw-rw-r--  1 qnxuser qnxuser 12595257 2026-11-11 22:53 big file.bin
+-rw-rw-r--  1 qnxuser qnxuser        0 2026-11-11 22:53 empty.txt
+-rw-rw-r--  1 qnxuser qnxuser   135144 2026-11-11 22:53 exactly one read.bin
+drwxrwxr-x  5 qnxuser qnxuser     4096 2026-11-11 22:53 level1 0
+drwxrwxr-x  5 qnxuser qnxuser     4096 2026-11-11 22:53 level1 1
+drwxrwxr-x  5 qnxuser qnxuser     4096 2026-11-11 22:53 level1 2
+drwxrwxr-x  2 qnxuser qnxuser    16384 2026-11-11 22:53 many files
+-rw-rw-r--  1 qnxuser qnxuser        1 2026-11-11 22:53 one byte.txt
+-rw-rw-r--  1 qnxuser qnxuser   135145 2026-11-11 22:53 one read plus 1.bin
+PASS: mode of the mount root is the host folder's mode (drwxrwxr-x)
+
+=== listing: host find vs guest find
+PASS: file list (191 lines equal)
+PASS: directory list (32 lines equal)
+PASS: ls of a 150-entry directory (several readdir calls)
+
+=== content: cksum (CRC and size) of every file, host vs guest
+PASS: cksum of all files (191 lines equal)
+PASS: md5 of big file.bin (12 MiB)
+PASS: read in 7777-byte blocks (dd)
+PASS: tail -c 100000 (lseek from the end)
+PASS: stat size (41337 bytes)
+
+=== missing file
+cat: /mnt/host/tree/no_such_file.txt: No such file or directory
+ls: /mnt/host/tree/no such dir/x: No such file or directory
+PASS: missing file and missing directory give ENOENT
+
+=== two concurrent readers of big file.bin, plus a concurrent find
+120473e2f90846afff2c09abcfd52c45  big file.bin
+120473e2f90846afff2c09abcfd52c45  big file.bin
+191
+PASS: two concurrent readers give the host md5
+PASS: concurrent find lists all files
+
+=== write operations in SHARE/rw (write, create, mkdir, unlink, rename)
+PASS: create + write + append: host sees 2 lines
+PASS: O_TRUNC rewrite: host sees 'short'
+PASS: cp of the 12 MiB file into the share: host md5 equal
+PASS: mkdir (nested) and a file inside: host sees them
+PASS: rename within a folder and across folders
+PASS: unlink files and rmdir folders: host sees them gone
+mkdir: '/mnt/host/rw/new.txt': File exists
+rmdir: /mnt/host/rw/new.txt: Not a directory
+rm: /mnt/host/rw/missing.txt: No such file or directory
+mv: bad '/mnt/host/rw/missing.txt': No such file or directory
+PASS: error cases: EEXIST, ENOTDIR, ENOENT
+PASS: file made on the host is visible in the guest
+PASS: listing of SHARE/rw after the write tests (3 lines equal)
+
+=== run a program from the share: built on the host with qcc into SHARE/run, started in the guest from /mnt/host/run
+PASS: qcc build into the share
+started from the share with 2 arguments
+status=7
+started from the share with 1 arguments
+status=7
+PASS: guest runs the program from the share (absolute and relative path, exit status 7)
+
+=== symbolic links (Treadlink, Tsymlink, redirect of the open) and statvfs (Tstatfs) in SHARE/links (tests/link_test.c)
+links made on the host: abs_null -> /dev/null, chain1 -> chain2, chain2 -> target.txt, dangling -> no_such_file, dirlink -> sub, link.txt -> target.txt, loop_a -> loop_b, loop_b -> loop_a, sub/innerlink -> inner.txt, up/back -> ../sub
+STEP lstat_link_is_link rc=0 errno=0 (ok) S_ISLNK=1 size=10
+STEP stat_link_follows_to_file rc=0 errno=0 (ok) S_ISREG=1 size=15
+STEP readlink_link rc=0 errno=0 (ok) target "target.txt" (as expected)
+STEP read_through_link rc=0 errno=0 (ok) content as expected
+STEP read_through_two_links rc=0 errno=0 (ok) content as expected
+STEP read_through_folder_link rc=0 errno=0 (ok) content as expected
+STEP read_through_link_with_dotdot rc=0 errno=0 (ok) content as expected
+STEP readlink_below_folder_link rc=0 errno=0 (ok) target "inner.txt" (as expected)
+STEP stat_folder_link_is_folder rc=0 errno=0 (ok)
+STEP stat_dangling_ENOENT rc=0 errno=2 (No such file or directory) expected errno 2 (No such file or directory): yes
+STEP lstat_dangling_is_link rc=0 errno=0 (ok)
+STEP open_loop_ELOOP rc=0 errno=90 (Too many levels of symbolic links or prefixes) expected errno 90 (Too many levels of symbolic links or prefixes): yes
+STEP write_through_absolute_link_to_dev_null rc=0 errno=0 (ok)
+STEP symlink_create rc=0 errno=0 (ok)
+STEP readlink_made_link rc=0 errno=0 (ok) target "target.txt" (as expected)
+STEP read_through_made_link rc=0 errno=0 (ok) content as expected
+STEP symlink_existing_EEXIST rc=0 errno=17 (File exists) expected errno 17 (File exists): yes
+STEP symlink_create_folder_link rc=0 errno=0 (ok)
+STEP create_file_through_folder_link rc=0 errno=0 (ok)
+STEP mkdir_through_folder_link rc=0 errno=0 (ok)
+STEP unlink_removes_link rc=0 errno=0 (ok)
+STEP lstat_after_unlink_ENOENT rc=0 errno=2 (No such file or directory) expected errno 2 (No such file or directory): yes
+STEP target_still_there rc=0 errno=0 (ok)
+STEP unlink_below_folder_link rc=0 errno=0 (ok)
+STEP statvfs rc=0 errno=0 (ok) 9p
+STEP fstatvfs_of_a_file rc=0 errno=0 (ok)
+PASS: lstat sees the link itself, stat and read follow it, readlink gives the target
+PASS: a chain of two links, a folder link in the middle of a path, a target with '..', readlink below a folder link
+PASS: a dangling link gives ENOENT (lstat still sees the link); a link loop ends with ELOOP, no hang
+PASS: an absolute target is resolved in the guest's namespace (abs_null -> /dev/null)
+PASS: symlink() in the guest makes links on the host (made_link -> target.txt, made_dirlink -> sub); EEXIST for an existing name
+PASS: a file and a folder created through the folder link made_dirlink appear in sub on the host
+PASS: unlink removes the link, not its target (also below a folder link)
+ls -l in the guest, link lines (type and permissions, name, target):
+  lrwxrwxrwx abs_null -> /dev/null
+  lrwxrwxrwx chain1 -> chain2
+  lrwxrwxrwx chain2 -> target.txt
+  lrwxrwxrwx dangling -> no_such_file
+  lrwxrwxrwx dirlink -> sub
+  lrwxrwxrwx link.txt -> target.txt
+  lrwxrwxrwx loop_a -> loop_b
+  lrwxrwxrwx loop_b -> loop_a
+  lrwxrwxrwx made_dirlink -> sub
+statvfs in the guest vs statfs of SHARE on the host: total bytes (size free), file nodes equal, name length equal; f_basetype 9p
+PASS: statvfs() and fstatvfs() answer from the host folder: total bytes equal (within one block), free bytes within 2 %, file nodes and name length equal
+
+=== a versioned shared library in the share: libx.so -> libx.so.1 -> libx.so.1.0 built with qcc on this machine; uselib loads it in the guest from /mnt/host/solib
+PASS: qcc: libx.so.1.0 (soname libx.so.1), links libx.so.1 and libx.so, uselib linked with -lx
+uselib needs: libx.so.1
+  lrwxrwxrwx libx.so -> libx.so.1
+  lrwxrwxrwx libx.so.1 -> libx.so.1.0
+  linked with -lx: libx 1.0
+  dlopen("libx.so"): ok, x_version() = 1
+  exit status 0
+PASS: tools/qnx-run -e LD_LIBRARY_PATH=SHARE/solib: the guest's loader found libx.so.1 and dlopen found libx.so, both through links in the share
+
+=== core dumps through the share: a program from the share crashes, dumper writes the core file into the share, the SDP's gdb on this machine opens it
+dumper in the image: dumper -U 30:30 -d /data/var/dumper -M 1000 -D cores
+PASS: qcc -g: crash built into the share
+dump folder now: /data/var/dumper -> /mnt/host/cores
+  parse_record() with a NULL record
+  bash: line 23: 2166811 segmentation violation     (core dumped) '/mnt/host/crash/crash' < /dev/null 3>&-
+  exit status 139
+  {"program":"SHARE/crash/crash","guest_program":"/mnt/host/crash/crash","exit_status":139,"signal":11,"signal_name":"SIGSEGV","timed_out":false,"time_limit_s":0,"host_signal":null,"stdout":"parse_record() with a NULL record\n","stdout_bytes":34,"stdout_truncated":false,"stderr":"bash: line 23: 2166811 segmentation violation     (core dumped) '/mnt/host/crash/crash' < /dev/null 3>&-\n","stderr_bytes":105,"stderr_truncated":false,"stdout_file":"REPO/tests/work/crash_out/stdout.txt","stderr_file":"REPO/tests/work/crash_out/stderr.txt","core_file":"SHARE/cores/crash.core","junit_file":null,"error":null}
+crash json ok
+dump folder restored: drwx------ /data/var/dumper
+files in SHARE/cores on the host: crash.core 
+PASS: tools/qnx-run: the program ended with SIGSEGV, exit status 139 (128 + 11) on the host
+PASS: dumper wrote crash.core through the share into the host folder
+PASS: qnx-run --json with QNX_CORE_DIR: signal 11, signal_name SIGSEGV (named by the guest), core_file = SHARE/cores/crash.core
+  Program terminated with signal SIGSEGV, Segmentation fault.
+  #0  read_value (p=0x0) at SHARE/crash/crash.c:2
+  #1  parse_record (p=0x0) at SHARE/crash/crash.c:3
+  #2  main (argc=1, argv=0x494a754ca8) at SHARE/crash/crash.c:9
+PASS: ntox86_64-gdb on this machine: bt of the core file shows read_value, parse_record, main with source lines
+
+=== attribute operations in SHARE/attr (tests/attr_test.c): fsync, ftruncate, truncate, fchmod, chmod, utime, utimes, chown
+host user who runs QEMU: uid 1000, gid 1000, second group 4
+STEP write_10 rc=0 errno=0 (ok) size=10 mode=644 uid=1000 gid=1000 atime=1794437607 mtime=1794437607
+STEP fsync rc=0 errno=0 (ok) size=10 mode=644 uid=1000 gid=1000 atime=1794437607 mtime=1794437607
+STEP ftruncate_4 rc=0 errno=0 (ok) size=4 mode=644 uid=1000 gid=1000 atime=1794437607 mtime=1794437607
+STEP ftruncate_10000 rc=0 errno=0 (ok) size=10000 mode=644 uid=1000 gid=1000 atime=1794437607 mtime=1794437607
+STEP fstat_size_is_10000 rc=0 errno=0 (ok) size=10000 mode=644 uid=1000 gid=1000 atime=1794437607 mtime=1794437607
+STEP truncate_6000 rc=0 errno=0 (ok) size=6000 mode=644 uid=1000 gid=1000 atime=1794437607 mtime=1794437607
+STEP fchmod_600 rc=0 errno=0 (ok) size=0 mode=600 uid=1000 gid=1000 atime=1794437607 mtime=1794437607
+STEP chmod_640 rc=0 errno=0 (ok) size=0 mode=640 uid=1000 gid=1000 atime=1794437607 mtime=1794437607
+STEP utime_1000000000_1200000000 rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=1000 atime=1000000000 mtime=1200000000
+STEP utimes_1300000000.25_1400000000.5 rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=1000 atime=1300000000 mtime=1400000000
+STEP utime_NULL_now rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=1000 atime=1794437607 mtime=1794437607
+STEP chown_own_ids rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=1000 atime=1794437607 mtime=1794437607
+STEP chgrp_gid2 rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=4 atime=1794437607 mtime=1794437607
+STEP chown_root_refused rc=-1 errno=1 (Operation not permitted) size=0 mode=644 uid=1000 gid=4 atime=1794437607 mtime=1794437607
+STEP chmod_dir_750 rc=0 errno=0 (ok) size=4096 mode=750 uid=1000 gid=1000 atime=1794437607 mtime=1794437607
+RESULT: attr_test done
+PASS: write and fsync return 0
+PASS: ftruncate to 4 and to 10000, truncate to 6000: host size 6000, bytes '0123' then zeros
+PASS: fchmod 600: host mode 600
+PASS: chmod 640: host mode 640, guest stat mode 640
+PASS: chmod of a folder: host mode 750
+PASS: utime: host atime 1000000000, mtime 1200000000
+PASS: utimes with microseconds: host atime 1300000000.250000000, mtime 1400000000.500000000
+PASS: utime(NULL): host mtime is the current host time
+PASS: chown to the host user's ids, chgrp to its group 4: host gid 4
+PASS: chown to root: EPERM from the host, owner unchanged
+
+=== robustness: two concurrent writers to different files
+guest md5: 92e0fd617f3669699647f5d79fd62da9 da8ad9259aabc7a20d3446d9c4d7ba2d; host md5: 92e0fd617f3669699647f5d79fd62da9 da8ad9259aabc7a20d3446d9c4d7ba2d 
+PASS: two concurrent cp of 24 MiB files: host md5 of both equal
+
+=== robustness: one write() of 100 MiB (dd bs=104857600 count=1)
+d54c207260d52a6b124853dc5c3af0a2  /tmp/fs9p_100.bin
+1+0 records in
+1+0 records out
+d54c207260d52a6b124853dc5c3af0a2  /mnt/host/robust/big100.bin
+host: 104857600 bytes, md5 d54c207260d52a6b124853dc5c3af0a2
+PASS: 100 MiB write: host size 104857600, host md5 equal to the guest's source
+PASS: 100 MiB file read back in the guest: md5 equal
+
+=== robustness: 2,000 small files created, listed, read and removed by the guest
+created=2000
+PASS: 2,000 files: host has 2000 files with the right content
+2000
+2000
+PASS: guest lists 2000 entries and reads 2000 lines
+rm=0
+PASS: rm -r of the 2,000-file folder: gone on the host
+
+=== robustness: path of depth 20 (more than 16 names: two Twalk messages)
+deep
+PASS: mkdir -p of depth 20 and a file at the bottom: host sees it
+PASS: host-made file at depth 20 read in the guest
+PASS: find below d1 lists 22 entries (20 folders, 2 files)
+PASS: rm -r of the depth-20 tree
+
+=== robustness: unmount and mount again, three times
+fs-9p: signal 15, unmounting /mnt/host (97556 9P requests, 2063 Rlerror, 90714 interrupts, 4558 found after unmask, 0 reaped by waiters, 0 lost, at most 3 requests in flight)
+fs-9p: priorities: highest waiting client 10; interrupt thread base 21, raised 0 times, highest 21; set below the base 1 times, lowest 10; 0 priority changes failed
+mount1=0
+d54c207260d52a6b124853dc5c3af0a2  /mnt/host/robust/big100.bin
+unmounted1
+mount2=0
+d54c207260d52a6b124853dc5c3af0a2  /mnt/host/robust/big100.bin
+unmounted2
+mount3=0
+d54c207260d52a6b124853dc5c3af0a2  /mnt/host/robust/big100.bin
+unmounted3
+PASS: 3 cycles of mount, md5 of the 100 MiB file, unmount
+
+=== robustness: driver restart while a client holds a file open
+mount=0
+before restart: read from the open fd gave '01234' (status 0)
+after slay -9: ls exit 1
+restart=0
+/tmp/fs9p/hold.sh: line 6: 3: Bad file descriptor
+after restart: read from the old fd: status 1 value ''
+/tmp/fs9p/hold.sh: redirection error: cannot duplicate fd: No such process
+/tmp/fs9p/hold.sh: line 7: 3: Bad file descriptor
+0123456789abcdefghij
+after restart: new open status 0
+/tmp/fs9p/hold.sh: line 11: 4: Bad file descriptor
+after SIGTERM unmount: read from an fd opened before: status 1 value ''
+/tmp/fs9p/hold.sh: redirection error: cannot duplicate fd: No such process
+/tmp/fs9p/hold.sh: line 12: 4: Bad file descriptor
+mount after SIGTERM=0
+0123456789abcdefghij
+PASS: restart with slay -9 while an fd is open: the new instance mounts and serves new opens
+PASS: the fd opened before the restart fails (reported above), no hang
+PASS: SIGTERM unmount with an open fd, then mount again: file readable
+
+=== image/fs-9p-supervise: automatic restart after slay -9, and the restart limit (FS9P_RESTART_MAX, FS9P_RESTART_WINDOW)
+  limit start: mounted
+  limit kill 1: new fs-9p, mounted
+  limit kill 2: new fs-9p, mounted
+  limit kill 3: no new fs-9p
+  limit: fs-9p processes after kill 3: 0
+  fs-9p-supervise: fs-9p ended by signal 9; starting it again (restart 1)
+  fs-9p-supervise: fs-9p ended by signal 9; starting it again (restart 2)
+  fs-9p-supervise: fs-9p ended by signal 9; not started again: 2 restarts in the last 10 s (limit FS9P_RESTART_MAX=2 in FS9P_RESTART_WINDOW=10 s)
+  window start: mounted
+  window kill 1: new fs-9p, mounted
+  window kill 2: new fs-9p, mounted
+  window kill 3: no new fs-9p
+  window: fs-9p processes after kill 3: 0
+  fs-9p-supervise: fs-9p ended by signal 9; starting it again (restart 1)
+  fs-9p-supervise: fs-9p ended by signal 9; starting it again (restart 2)
+  fs-9p-supervise: fs-9p ended by signal 9; not started again: 1 restarts in the last 10 s (limit FS9P_RESTART_MAX=1 in FS9P_RESTART_WINDOW=10 s)
+PASS: fs-9p-supervise: after each of 2 kills a new fs-9p mounted the share without a typed command
+PASS: restart limit: the third kill within 10 s is not followed by a restart, and the reason is printed
+PASS: restart window: a restart older than 10 s no longer counts (limit 1: kill, 11 s, kill restarts, kill stops)
+
+=== tools/qnx-run: make and ctest on this machine run the unit tests of examples/qnx-unit inside the guest, from the share
+QNX 8.0.0
+exit status 0
+PASS: qnx-run uname -sr: a guest command, its output and exit status 0 on the host
+  make: Entering directory 'SHARE/qnx-unit'
+  mkdir -p build
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -std=gnu11 -o build/test_ring SHARE/qnx-unit/tests/test_ring.c
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -std=gnu11 -o build/test_msg SHARE/qnx-unit/tests/test_msg.c
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -std=gnu11 -o build/test_pulse SHARE/qnx-unit/tests/test_pulse.c
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -std=gnu11 -o build/exit_status SHARE/qnx-unit/tests/exit_status.c
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -std=gnu11 -o build/stuck_receive SHARE/qnx-unit/tests/stuck_receive.c
+  == test_ring (in the QNX guest)
+  ok 1 - empty ring: get fails
+  ok 2 - 8 puts into an empty ring succeed
+  ok 3 - put into a full ring fails
+  ok 4 - gets return the values in order
+  ok 5 - the indexes wrap around correctly
+  5 of 5 checks passed
+  == test_msg (in the QNX guest)
+  ok 1 - default channel: ChannelCreate
+  ok 2 - default channel: server thread at priority 10
+  ok 3 - default channel: ConnectAttach
+  ok 4 - default channel: client thread at priority 30
+  ok 5 - default channel: MsgSend gets the reply "HELLO QNX"
+  ok 6 - default channel: the server thread ran at priority 30 while serving (expected 30)
+  ok 7 - default channel: MsgError(ENOTSUP) reaches the client as errno ENOTSUP
+  ok 8 - fixed-priority channel: ChannelCreate
+  ok 9 - fixed-priority channel: server thread at priority 10
+  ok 10 - fixed-priority channel: ConnectAttach
+  ok 11 - fixed-priority channel: client thread at priority 30
+  ok 12 - fixed-priority channel: MsgSend gets the reply "HELLO QNX"
+  ok 13 - fixed-priority channel: the server thread ran at priority 10 while serving (expected 10)
+  ok 14 - fixed-priority channel: MsgError(ENOTSUP) reaches the client as errno ENOTSUP
+  14 of 14 checks passed
+  == test_pulse (in the QNX guest)
+  ok 1 - channel and connection
+  ok 2 - MsgSendPulse(code 5, value 1234)
+  ok 3 - MsgReceive returns the pulse: rcvid 0, code 5, value 1234
+  ok 4 - queued pulses come out by priority: code 2 (priority 20), then code 1 (priority 10)
+  ok 5 - timer_create with a pulse event
+  ok 6 - timer_settime (one shot)
+  ok 7 - the timer delivers its pulse: code 6, value 77
+  7 of 7 checks passed
+  == exit_status 3 (must return 3)
+  exit_status: stdout line
+  exit_status: stderr line
+  exit status 3 reached make
+  == exit_status 0 with the host path of a file in B (host path argument)
+  exit_status: stderr line
+  exit_status: stdout line
+  exit_status: open /mnt/host/qnx-unit/build/exit_status: ok
+  qnx-test: 0 failed
+  make: Leaving directory 'SHARE/qnx-unit'
+  make exit status 0
+PASS: make qnx-test: test_ring, test_msg and test_pulse passed in the guest (26 checks, 0 failed)
+PASS: make qnx-test: exit status 3 and the stderr line of a guest program reached the host
+PASS: a host path argument inside the share reached the program as /mnt/host/qnx-unit/build/exit_status
+PASS: JUnit files: 3 written on the host, each with failures="0"
+PASS: qnx-run -j on a program that exits with 3: exit status 3 and a JUnit failure element
+  == test_ring (in the QNX guest, with gcov counters)
+  5 of 5 checks passed
+  == test_msg (in the QNX guest, with gcov counters)
+  14 of 14 checks passed
+  == test_pulse (in the QNX guest, with gcov counters)
+  7 of 7 checks passed
+  coverage: 3 .gcda files written by the guest into build/cov
+  ------------------------------------------------------------------------------
+                             GCC Code Coverage Report
+  Directory: .
+  ------------------------------------------------------------------------------
+  File                                         Lines     Exec  Cover   Missing
+  ------------------------------------------------------------------------------
+  tests/test_msg.c                                43       43   100%
+  tests/test_pulse.c                              24       24   100%
+  tests/test_ring.c                               16       16   100%
+  ------------------------------------------------------------------------------
+  TOTAL                                           83       83   100%
+  ------------------------------------------------------------------------------
+  coverage: HTML report build/cov/html/index.html
+  coverage: 0 failed
+  make exit status 0
+PASS: make coverage: the 3 tests ran in the guest with gcov counters; 3 .gcda files appeared in the host build folder through the share
+PASS: coverage report on the host from the guest's .gcda files (TOTAL 83 83 100%)
+cmake: cmake version 3.31.6
+  [100%] Built target stuck_receive
+  [100%] Built target test_pulse
+  cmake exit status 0
+PASS: CTestTestfile.cmake runs every test through tools/qnx-run (CMAKE_CROSSCOMPILING_EMULATOR)
+  Test project SHARE/qnx-unit/cbuild
+      Start 1: test_ring
+  1/5 Test #1: test_ring ........................   Passed
+      Start 2: test_msg
+  2/5 Test #2: test_msg .........................   Passed
+      Start 3: test_pulse
+  3/5 Test #3: test_pulse .......................   Passed
+      Start 4: runner_exit_status
+  4/5 Test #4: runner_exit_status ...............   Passed
+      Start 5: runner_host_path_argument
+  5/5 Test #5: runner_host_path_argument ........   Passed
+  
+  100% tests passed, 0 tests failed out of 5
+  
+  ctest exit status 0
+PASS: ctest: 5 of 5 tests passed, each run inside the guest (runner_exit_status passes because its program exits with 3)
+PASS: ctest --output-junit: junit.xml with 5 tests, 0 failures
+
+=== tools/qnx-run stops the guest program: time limit (-t), SIGINT and SIGTERM to qnx-run, ctest TIMEOUT
+  stuck_receive: a process waits in MsgReceive()
+  stuck_receive: a process waits in MsgReceive()
+  exit status 124
+PASS: qnx-run -t 3: exit status 124; the program and its child (2 processes in MsgReceive) were stopped, 0 left in the guest when qnx-run returned
+  stuck_receive: a process waits in MsgReceive()
+  stuck_receive: a process waits in MsgReceive()
+  bash: line 23: 6504475 kill                       '/mnt/host/qnx-unit/build/stuck_receive' 'ignore-term' 'fork' < /dev/null 3>&-
+  exit status 124
+PASS: qnx-run -t 3, program ignores SIGTERM: SIGKILL 2 s after SIGTERM; exit status 124, 0 left
+  stuck_receive: a process waits in MsgReceive()
+  stuck_receive: a process waits in MsgReceive()
+  exit status 130
+PASS: SIGINT to qnx-run while the program waits: exit status 130; qnx-run returned after the guest had stopped both processes (0 left)
+  stuck_receive: a process waits in MsgReceive()
+  stuck_receive: a process waits in MsgReceive()
+  exit status 143
+PASS: SIGTERM to qnx-run while the program waits: exit status 143; qnx-run returned after the guest had stopped both processes (0 left)
+  cmake exit status 0
+  Test project SHARE/qnx-unit/cbuild-timeout
+      Start 6: runner_timeout
+  1/1 Test #6: runner_timeout ...................***Timeout
+  
+  0% tests passed, 1 tests failed out of 1
+  
+  
+  The following tests FAILED:
+  	  6 - runner_timeout (Timeout)
+  Errors while running CTest
+  Output from these tests are in: SHARE/qnx-unit/cbuild-timeout/Testing/Temporary/LastTest.log
+  Use "--rerun-failed --output-on-failure" to re-run the failed cases verbosely.
+  ctest exit status 8
+PASS: ctest TIMEOUT 5 (test runner_timeout = stuck_receive fork): ctest reported Timeout and ended qnx-run; the guest then stopped both processes (0 left; checked once a second, at most 10 times)
+
+=== tools/qnx-run --json: one JSON line with the exit status, signal, time limit, output and output files
+  {"program":"SHARE/qnx-unit/build/exit_status","guest_program":"/mnt/host/qnx-unit/build/exit_status","exit_status":3,"signal":null,"signal_name":null,"timed_out":false,"time_limit_s":60,"host_signal":null,"stdout":"exit_status: stdout line\n","stdout_bytes":25,"stdout_truncated":false,"stderr":"exit_status: stderr line\n","stderr_bytes":25,"stderr_truncated":false,"stdout_file":"REPO/tests/work/j1out/stdout.txt","stderr_file":"REPO/tests/work/j1out/stderr.txt","core_file":null,"junit_file":null,"error":null}
+  exit status 3
+  {"program":"SHARE/qnx-unit/build/stuck_receive","guest_program":"/mnt/host/qnx-unit/build/stuck_receive","exit_status":124,"signal":null,"signal_name":null,"timed_out":true,"time_limit_s":2,"host_signal":null,"stdout":"stuck_receive: a process waits in MsgReceive()\n","stdout_bytes":47,"stdout_truncated":false,"stderr":"","stderr_bytes":0,"stderr_truncated":false,"stdout_file":"REPO/tests/work/j2out/stdout.txt","stderr_file":"REPO/tests/work/j2out/stderr.txt","core_file":null,"junit_file":null,"error":null}
+  exit status 124
+json1 ok
+json2 ok
+PASS: qnx-run --json, program exits with 3: valid JSON; exit_status 3, signal null, timed_out false, stdout and stderr lines; stdout_file holds the same text
+PASS: qnx-run --json -t 2 on stuck_receive: exit_status 124, timed_out true, its output line; 0 left in the guest
+
+=== AGENTS.md: the commands of its marked block, run as written from the repository root
+    B=$QNX_SHARE/agent-build                         # build folder inside the share
+    make -C examples/qnx-unit B="$B"                 # build the example's tests with qcc on the host
+    tools/qnx-run --json -t 60 "$B/test_ring"        # one test in the guest: one JSON line on stdout
+    tools/qnx-run --json -t 60 "$B/exit_status" 3    # a failing program: "exit_status":3
+    tools/qnx-run --json -t 3 "$B/stuck_receive"     # a hung program: stopped, "timed_out":true
+    cmake -S examples/qnx-unit -B "$B/cmake" -DCMAKE_TOOLCHAIN_FILE="$PWD/examples/qnx-unit/qnx-x86_64.cmake" \
+          -DCMAKE_CROSSCOMPILING_EMULATOR="$PWD/tools/qnx-run;-t;60"
+    cmake --build "$B/cmake"
+    ctest --test-dir "$B/cmake" --output-junit junit.xml   # all tests in the guest; JUnit in $B/cmake/junit.xml
+  mkdir -p SHARE/agent-build
+  {"program":"SHARE/agent-build/test_ring","guest_program":"/mnt/host/agent-build/test_ring","exit_status":0,"signal":null,"signal_name":null,"timed_out":false,"time_limit_s":60,"host_signal":null,"stdout":"ok 1 - empty ring: get fails\nok 2 - 8 puts into an empty ring succeed\nok 3 - put into a full ring fails\nok 4 - gets return the values in order\nok 5 - the indexes wrap around correctly\n5 of 5 checks passed\n","stdout_bytes":205,"stdout_truncated":false,"stderr":"","stderr_bytes":0,"stderr_truncated":false,"stdout_file":"REPO/tests/work/agtmp/qnx-run.Se736N/stdout.txt","stderr_file":"REPO/tests/work/agtmp/qnx-run.Se736N/stderr.txt","core_file":null,"junit_file":null,"error":null}
+  {"program":"SHARE/agent-build/exit_status","guest_program":"/mnt/host/agent-build/exit_status","exit_status":3,"signal":null,"signal_name":null,"timed_out":false,"time_limit_s":60,"host_signal":null,"stdout":"exit_status: stdout line\n","stdout_bytes":25,"stdout_truncated":false,"stderr":"exit_status: stderr line\n","stderr_bytes":25,"stderr_truncated":false,"stdout_file":"REPO/tests/work/agtmp/qnx-run.CPgiUP/stdout.txt","stderr_file":"REPO/tests/work/agtmp/qnx-run.CPgiUP/stderr.txt","core_file":null,"junit_file":null,"error":null}
+  {"program":"SHARE/agent-build/stuck_receive","guest_program":"/mnt/host/agent-build/stuck_receive","exit_status":124,"signal":null,"signal_name":null,"timed_out":true,"time_limit_s":3,"host_signal":null,"stdout":"stuck_receive: a process waits in MsgReceive()\n","stdout_bytes":47,"stdout_truncated":false,"stderr":"","stderr_bytes":0,"stderr_truncated":false,"stdout_file":"REPO/tests/work/agtmp/qnx-run.1kNfnT/stdout.txt","stderr_file":"REPO/tests/work/agtmp/qnx-run.1kNfnT/stderr.txt","core_file":null,"junit_file":null,"error":null}
+  Internal ctest changing into directory: SHARE/agent-build/cmake
+  Test project SHARE/agent-build/cmake
+      Start 1: test_ring
+  1/5 Test #1: test_ring ........................   Passed
+      Start 2: test_msg
+  2/5 Test #2: test_msg .........................   Passed
+      Start 3: test_pulse
+  3/5 Test #3: test_pulse .......................   Passed
+      Start 4: runner_exit_status
+  4/5 Test #4: runner_exit_status ...............   Passed
+      Start 5: runner_host_path_argument
+  5/5 Test #5: runner_host_path_argument ........   Passed
+  
+  100% tests passed, 0 tests failed out of 5
+  
+json lines 3
+checks ok
+PASS: AGENTS.md block: three JSON lines (test_ring exit_status 0; exit_status 3; stuck_receive timed_out true, 124)
+PASS: AGENTS.md block: ctest with tools/qnx-run -t 60 as emulator, 5 of 5 passed in the guest, junit.xml with 5 tests
+PASS: AGENTS.md block: no stuck_receive left in the guest
+
+=== unmount (SIGTERM)
+ls: /mnt/host: No such file or directory
+fs-9p: signal 15, unmounting /mnt/host (1015 9P requests, 3 Rlerror, 899 interrupts, 102 found after unmask, 0 reaped by waiters, 0 lost, at most 2 requests in flight)
+fs-9p: priorities: highest waiting client 30; interrupt thread base 21, raised 7 times, highest 30; set below the base 2 times, lowest 10; 0 priority changes failed
+PASS: unmount
+
+=== option -p: poll the used ring instead of using the interrupt (fs-9p -d -p)
+exit=0
+fs-9p 0.9.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, polling, 16 request slots)
+PASS: mount with -p: the driver reports polling
+PASS: cksum of all files (polling) (191 lines equal)
+cp=0
+PASS: cp of the 12 MiB file into the share with -p: host md5 equal
+fs-9p 0.9.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, polling, 16 request slots)
+fs-9p: signal 15, unmounting /mnt/host (7471 9P requests, 4 Rlerror, 0 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight)
+PASS: statistics at unmount with -p: 0 interrupts used
+
+=== option -n 64: 64 request slots, 64 concurrent readers
+exit=0
+VIRTIO: queue 0 size 128
+fs-9p 0.9.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 64 request slots)
+PASS: mount with -n 64: 64 request slots
+PASS: 64 concurrent readers of the 12 MiB file: 64 md5 equal to the host's
+fs-9p: signal 15, unmounting /mnt/host (49815 9P requests, 0 Rlerror, 2266 interrupts, 2032 found after unmask, 0 reaped by waiters, 0 lost, at most 64 requests in flight)
+fs-9p: priorities: highest waiting client 10; interrupt thread base 21, raised 0 times, highest 21; set below the base 1 times, lowest 10; 0 priority changes failed
+largest number of 9P requests in flight at the same time during this mount: 64 (limit 64)
+PASS: with -n 64 more requests than the default 16 slots were in flight at once (64)
+
+=== option -U: after setup fs-9p runs as a non-root user and keeps only the abilities io and priority
+exit=0
+fs-9p: running as uid 1000 gid 1000; abilities kept for non-root: io, priority
+fs-9p 0.9.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+     pid name                                                                                    uid       euid
+ 8675356 tmp/fs9p/fs-9p                                                                         1000       1000
+-- threads (priority and scheduling policy, state):
+     pid tid name                         prio STATE          Blocked                     
+ 8675356   1 tmp/fs9p/fs-9p                10r SIGWAITINFO                                
+ 8675356   2 tmp/fs9p/fs-9p                10f INTR                                       
+ 8675356   3 tmp/fs9p/fs-9p                10r RECEIVE        1                           
+ 8675356   4 tmp/fs9p/fs-9p                10r RECEIVE        1                           
+-- abilities that the non-root set allows:
+                     io  RNL-
+               priority  RNL-
+PASS: mount with -U qnxuser: fs-9p reports uid 1000 after setup
+PASS: pidin: user ID and effective user ID of the running fs-9p are 1000, not 0
+PASS: pidin: the non-root set allows 2 abilities, io and priority, both locked
+PASS: cksum of all files (fs-9p running as 1000) (191 lines equal)
+cp=0
+mv=0
+PASS: write, mkdir and rename with fs-9p running as 1000: host md5 equal
+fs-9p: signal 15, unmounting /mnt/host (7488 9P requests, 6 Rlerror, 7458 interrupts, 30 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight)
+fs-9p: priorities: highest waiting client 10; interrupt thread base 21, raised 0 times, highest 21; set below the base 1 times, lowest 10; 0 priority changes failed
+PASS: unmount of the non-root instance; every completion came through the interrupt, 0 lost
+
+=== interrupt-thread priority under CPU load: 8 CPU-bound loops at priority 30, a reader at priority 40; base priority 21, fixed (-f) and following the client (default)
+guest processors: 4
+fs-9p 0.9.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, fixed), 16 request slots)
+a2cd5bfde9914783dd6d7ec72e70d493  -
+loops that had ended when the read finished: 0 of 8
+fs-9p: signal 15, unmounting /mnt/host (27 9P requests, 0 Rlerror, 3 interrupts, 0 found after unmask, 24 reaped by waiters, 0 lost, at most 1 requests in flight)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 0 times, highest 21; set below the base 0 times, lowest 21; 0 priority changes failed
+PASS: reader at priority 40 under load at 30 (fs-9p -f): md5 of the first 2 MiB equal to the host's
+fs-9p 0.9.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+a2cd5bfde9914783dd6d7ec72e70d493  -
+loops that had ended when the read finished: 0 of 8
+fs-9p: signal 15, unmounting /mnt/host (27 9P requests, 0 Rlerror, 27 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 24 times, highest 40; set below the base 1 times, lowest 10; 0 priority changes failed
+PASS: reader at priority 40 under load at 30 (fs-9p ): md5 of the first 2 MiB equal to the host's
+PASS: mount lines: base priority 21; fixed with -f, following by default
+completions collected by the fallback wait instead of the interrupt thread: 24 with -f, 0 by default (fallback wait: a waiting server thread that has no completion after 200 ms, a constant in src/virtq.c, checks the ring itself)
+highest waiting client priority: 40 with -f, 40 by default; highest interrupt-thread priority: 21 with -f, 40 by default
+PASS: with -f the interrupt thread stays at 21 and the load at 30 delays it (24 fallback completions)
+PASS: by default the interrupt thread follows the reader to priority 40: 0 fallback completions, 0 failed priority changes
+
+=== a client below the base priority: reader at priority 8; base priority 21, fixed (-f) and following the client (default)
+a2cd5bfde9914783dd6d7ec72e70d493  -
+fs-9p: priorities: highest waiting client 10; interrupt thread base 21, raised 0 times, highest 21; set below the base 0 times, lowest 21; 0 priority changes failed
+PASS: reader at priority 8 (fs-9p -f): md5 of the first 2 MiB equal to the host's
+a2cd5bfde9914783dd6d7ec72e70d493  -
+fs-9p: priorities: highest waiting client 10; interrupt thread base 21, raised 0 times, highest 21; set below the base 2 times, lowest 8; 0 priority changes failed
+PASS: reader at priority 8 (fs-9p ): md5 of the first 2 MiB equal to the host's
+interrupt thread set below the base: 0 times with -f (lowest 21), 2 times by default (lowest 8)
+PASS: with -f the interrupt thread never goes below 21
+PASS: by default the interrupt thread goes down to the reader's priority 8 (2 changes below the base)
+
+=== a client above the maximum priority for unprivileged processes: fs-9p -U qnxuser, reader (root) at priority 70, 8 loops at 65
+fs-9p: running as uid 1000 gid 1000; abilities kept for non-root: io, priority
+fs-9p 0.9.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+a2cd5bfde9914783dd6d7ec72e70d493  -
+loops that had ended when the read finished: 0 of 8
+fs-9p: signal 15, unmounting /mnt/host (27 9P requests, 0 Rlerror, 27 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight)
+fs-9p: priorities: highest waiting client 70; interrupt thread base 21, raised 24 times, highest 70; set below the base 1 times, lowest 10; 0 priority changes failed
+PASS: reader at priority 70 under load at 65 (fs-9p -U qnxuser): md5 of the first 2 MiB equal to the host's
+fs-9p: running as uid 1000 gid 1000; abilities kept for non-root: io
+fs-9p 0.9.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+a2cd5bfde9914783dd6d7ec72e70d493  -
+loops that had ended when the read finished: 5 of 8
+fs-9p: signal 15, unmounting /mnt/host (27 9P requests, 0 Rlerror, 27 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight)
+fs-9p: priorities: highest waiting client 63; interrupt thread base 21, raised 24 times, highest 63; set below the base 1 times, lowest 10; 0 priority changes failed
+PASS: reader at priority 70 under load at 65 (fs-9p -U qnxuser -P): md5 of the first 2 MiB equal to the host's
+-U: highest waiting client 70, interrupt thread highest 70, 0 failed changes, 0 fallback completions, 0 of 8 loops ended before the read finished
+-U -P: highest waiting client 63, interrupt thread highest 63, 0 failed changes, 5 of 8 loops ended before the read finished
+PASS: start-up lines: -U keeps io and priority, -U -P keeps only io
+PASS: with the priority ability the non-root fs-9p serves the client at 70: interrupt thread raised to 70, 0 failed changes, 0 fallback completions, the read finished while all 8 loops still ran
+PASS: without it (-P) the pool thread ran at 63, below the loops, and the read finished only after 5 of 8 loops had ended (more than 8 minus 4 processors)
+
+=== two virtio-9p devices at the same time: -a selects by mount tag; share2 is modern-only (1af4:1049)
+exit1=0
+exit2=0
+fs-9p 0.9.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+fs-9p 0.9.0: mount tag "share2" mounted at /mnt/host2 (9P2000.L, msize 135168, modern interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+fs-9p: virtio-9p device 0 is attached by another driver or not usable; skipping it
+PCI: found 1af4:1049 bdf=0x28
+PASS: two instances mounted: -a hostshare at /mnt/host, -a share2 at /mnt/host2
+PASS: -t auto (default) uses the virtio 1.x interface for the modern-only device 1af4:1049
+PASS: the second instance skips the device that the first instance owns (no reset)
+PASS: each mountpoint shows its own host folder
+
+=== write operations over the virtio 1.x interface (device share2, /mnt/host2)
+PASS: modern: create + write + append: host sees 2 lines
+PASS: modern: O_TRUNC rewrite
+PASS: modern: cp of the 12 MiB file from /mnt/host to /mnt/host2: host md5 equal
+PASS: modern: mkdir, rename within and across folders
+PASS: modern: unlink and rmdir
+699da76cbeeeb17e9c40e8a28fbf7299  /tmp/fs9p_m100.bin
+1+0 records in
+1+0 records out
+PASS: modern: one write() of 100 MiB, host md5 equal
+STEP write_10 rc=0 errno=0 (ok) size=10 mode=644 uid=1000 gid=1000 atime=1794437771 mtime=1794437771
+STEP fsync rc=0 errno=0 (ok) size=10 mode=644 uid=1000 gid=1000 atime=1794437771 mtime=1794437771
+STEP ftruncate_4 rc=0 errno=0 (ok) size=4 mode=644 uid=1000 gid=1000 atime=1794437771 mtime=1794437771
+STEP ftruncate_10000 rc=0 errno=0 (ok) size=10000 mode=644 uid=1000 gid=1000 atime=1794437771 mtime=1794437771
+STEP fstat_size_is_10000 rc=0 errno=0 (ok) size=10000 mode=644 uid=1000 gid=1000 atime=1794437771 mtime=1794437771
+STEP truncate_6000 rc=0 errno=0 (ok) size=6000 mode=644 uid=1000 gid=1000 atime=1794437771 mtime=1794437771
+STEP fchmod_600 rc=0 errno=0 (ok) size=0 mode=600 uid=1000 gid=1000 atime=1794437771 mtime=1794437771
+STEP chmod_640 rc=0 errno=0 (ok) size=0 mode=640 uid=1000 gid=1000 atime=1794437771 mtime=1794437771
+STEP utime_1000000000_1200000000 rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=1000 atime=1000000000 mtime=1200000000
+STEP utimes_1300000000.25_1400000000.5 rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=1000 atime=1300000000 mtime=1400000000
+STEP utime_NULL_now rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=1000 atime=1794437771 mtime=1794437771
+STEP chown_own_ids rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=1000 atime=1794437771 mtime=1794437771
+STEP chgrp_gid2 rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=4 atime=1794437771 mtime=1794437771
+STEP chown_root_refused rc=-1 errno=1 (Operation not permitted) size=0 mode=644 uid=1000 gid=4 atime=1794437771 mtime=1794437771
+STEP chmod_dir_750 rc=0 errno=0 (ok) size=4096 mode=750 uid=1000 gid=1000 atime=1794437765 mtime=1794437771
+RESULT: attr_test done
+PASS: modern: attribute test gives the same step results as on the legacy interface (15 lines equal)
+PASS: modern: chmod 640, utime and truncate seen on the host
+fs-9p: signal 15, unmounting /mnt/host (791 9P requests, 0 Rlerror, 791 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight)
+fs-9p: priorities: highest waiting client 10; interrupt thread base 21, raised 0 times, highest 21; set below the base 1 times, lowest 10; 0 priority changes failed
+fs-9p: signal 15, unmounting /mnt/host2 (1886 9P requests, 28 Rlerror, 1871 interrupts, 15 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight)
+fs-9p: priorities: highest waiting client 10; interrupt thread base 21, raised 0 times, highest 21; set below the base 1 times, lowest 10; 0 priority changes failed
+both-unmounted
+PASS: both instances unmounted, 0 lost requests
+PASS: both instances: every completion was found through the interrupt (0 reaped by the 200 ms fallback scan)
+
+=== option -a with a mount tag that no device has
+fs-9p: no virtio-9p device with mount tag "no_such_tag" found
+exit=1
+PASS: -a no_such_tag: error message and exit status 1
+
+=== second mount, read-only, with the virtio 1.x (modern) interface: fs-9p -d -r -t modern
+exit=0
+PASS: mount (modern interface)
+PASS: cksum of all files (modern interface) (191 lines equal)
+PASS: two concurrent readers (modern interface)
+bash: line 1: /mnt/host/tree/new.txt: Read-only file system
+mkdir: '/mnt/host/tree/newdir': Read-only file system
+rm: /mnt/host/tree/empty.txt: Read-only file system
+mv: bad '/mnt/host/tree/empty.txt': Read-only file system
+PASS: read-only mount: write, mkdir, rm, mv give EROFS
+chmod: chmod '/mnt/host/tree/empty.txt' to 0600: Read-only file system
+chown: '/mnt/host/tree/empty.txt' to '0:': Read-only file system
+touch: '/mnt/host/tree/empty.txt': Read-only file system
+PASS: read-only mount: chmod, chown, touch give EROFS
+PASS: host tree unchanged
+ls: /mnt/host: No such file or directory
+fs-9p: signal 15, unmounting /mnt/host (7518 9P requests, 4 Rlerror, 6626 interrupts, 362 found after unmask, 0 reaped by waiters, 0 lost, at most 2 requests in flight)
+fs-9p: priorities: highest waiting client 10; interrupt thread base 21, raised 0 times, highest 21; set below the base 1 times, lowest 10; 0 priority changes failed
+PASS: unmount (modern interface)
+
+RESULT: 141 passed, 0 failed

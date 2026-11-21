@@ -1,0 +1,10 @@
+# aarch64le build of fs-9p 0.10.0 sources (ac061f948768), 2026-11-13, qcc of the QNX 8.0 SDP; complete make output, folder path replaced; 0 warning lines (grep -c warning)
+make: Entering directory '<copy of the fs-9p folder>'
+mkdir -p build-a64
+qcc -Vgcc_ntoaarch64le -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build-a64/fs-9p src/fs9p.c src/virtio_pci.c src/virtq.c src/p9.c src/p9_errno.c -lpci
+qcc -Vgcc_ntoaarch64le -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build-a64/v9p_probe tools/v9p_probe.c src/virtio_pci.c src/virtq.c src/p9.c src/p9_errno.c -lpci
+qcc -Vgcc_ntoaarch64le -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build-a64/errno_test tests/errno_test.c src/p9_errno.c
+qcc -Vgcc_ntoaarch64le -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build-a64/attr_test tests/attr_test.c
+qcc -Vgcc_ntoaarch64le -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build-a64/link_test tests/link_test.c
+qcc -Vgcc_ntoaarch64le -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build-a64/writers_test tests/writers_test.c
+make: Leaving directory '<copy of the fs-9p folder>'

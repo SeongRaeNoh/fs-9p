@@ -1,0 +1,65 @@
+=== command block from README.md (run unchanged):
+mkdir -p "$SHARE"
+[ -f overlay.qcow2 ] || qemu-img create -f qcow2 -b output/disk-qemu.vmdk -F vmdk overlay.qcow2
+qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -m 4G \
+  -drive file=overlay.qcow2,if=ide,id=drv0 \
+  -netdev user,id=net0,hostfwd=tcp:127.0.0.1:${SSH_PORT}-:22 \
+  -device virtio-net-pci,netdev=net0,mac=52:54:00:91:01:ea \
+  -kernel output/ifs.bin -serial mon:stdio \
+  -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0 \
+  -vga none -display none \
+  -fsdev local,id=fs0,path="$SHARE",security_model=none \
+  -device virtio-9p-pci,fsdev=fs0,mount_tag=hostshare
+
+=== start QEMU (tmux session; the window is the serial console)
+PASS: guest booted to the login prompt on the serial console
+
+=== copy the driver as the normal user: scp -P $SSH_PORT build/fs-9p qnxuser@127.0.0.1:/tmp/
+PASS: scp as qnxuser
+
+=== serial console: log in as root, start fs-9p, use the share, unmount
+PASS: root login on the serial console
+PASS: fs-9p -d exit status 0
+PASS: guest reads the host file
+PASS: host sees the file written in the guest
+PASS: unmount (slay fs-9p)
+
+=== quit QEMU with Ctrl-a x
+PASS: QEMU quit (exit status 0)
+
+=== serial console (from the login prompt on)
+login:
+login: root
+Password:
+[QNX welcome banner removed]
+[lines removed: login banner of the image]
+[root@qnxqemu ~]# Unable to access /dev/screen/
+[line removed: timing output of the guest boot script]
+---> waitfor /dev/screen/ failed.
+/system/etc/startup/post_startup.sh[62]: cannot create /dev/screen/command: No such file or directory
+---> Error Screen not available.  Sensor framework will not be started.
+To exit QEMU, type <ctrl>a x
+Process count:29
+echo "R0=$((20+1))"
+R0=21
+[root@qnxqemu ~]# /tmp/fs-9p -d; echo "R1=$?"
+fs-9p 0.3.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven, 16 requests in flight)
+R1=0
+[root@qnxqemu ~]# ls -l /mnt/host; cat /mnt/host/readme_check.txt; echo "written in the guest" > /mnt/host/from_guest.txt; echo "R2=$((40+2))"
+total 40
+drwxr-x---  2 qnxuser qnxuser 4096 2026-11-11 10:23 attr
+drwxrwxr-x  2 qnxuser qnxuser 4096 2026-11-11 10:23 demo
+-rw-rw-r--  1 qnxuser qnxuser   26 2026-11-11 09:50 hello.txt
+-rw-rw-r--  1 qnxuser qnxuser   41 2026-11-11 10:25 readme_check.txt
+drwxrwxr-x  2 qnxuser qnxuser 4096 2026-11-11 10:23 rw
+drwxrwxr-x  2 qnxuser qnxuser 4096 2026-11-11 09:50 sub
+drwxrwxr-x  6 qnxuser qnxuser 4096 2026-11-11 10:22 tree
+written on the host for the README check
+R2=42
+[root@qnxqemu ~]# slay fs-9p; sleep 1; ls /mnt/host; echo "R3=$((1+2))"
+ls: /mnt/host: No such file or directory
+R3=3
+[root@qnxqemu ~]# QEMU: Terminated
+QEMU-EXITED status=0
+
+RESULT: 8 passed, 0 failed

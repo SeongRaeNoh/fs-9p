@@ -1,0 +1,114 @@
+# demo/oss-suite.sh, 2026-11-13T03:16:20+09:00, sources sha256 ac061f948768 (tests/srchash.sh): 2 open-source projects, their own test suites on QNX 8.0 (guest) and on Linux (host)
+host: Linux x86_64; host compiler: cc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0; cmake version 3.31.6
+
+== 1. fetch (shallow clone at a tag; nothing is changed in the clones)
+check: https://github.com/libcheck/check.git tag 0.15.2, commit 11970a7
+libxml2: https://gitlab.gnome.org/GNOME/libxml2.git tag v2.13.5, commit de918d4
+
+== 3. QNX: tools/qnx-ci.sh boots the guest, builds every project with qcc, runs each suite in the guest, stops the guest
+== qnx-ci: 2 project(s); ctest -j 4; time limit 1500 s per test (tools/qnx-run -t, a setting; --timeout=N of a project overrides it); coverage off
+== boot the VM: tools/qnx-vm start IMAGE SHARE 22349
+qnx-vm: ready: the guest answers on ssh and /mnt/host is mounted
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+guest: QNX 8.0.0
+core files: the guest's dumper folder /data/var/dumper is a link to /mnt/host/ci/cores (SHARE/ci/cores on the host) during this run
+
+== project 1 of 2: check (SHARE/oss-src/check); build folder SHARE/ci/check, seen as /mnt/host/ci/check in the guest
+CMake options: -DCHECK_ENABLE_TIMEOUT_TESTS=OFF
+configure or build failed; last lines:
+==> SHARE/ci/check.configure.txt <==
+-- Check size of ssize_t
+-- Check size of ssize_t - done
+-- Check size of pid_t
+-- Check size of pid_t - done
+-- Check size of timer_t
+-- Check size of timer_t - done
+-- Looking for floor in m
+-- Looking for floor in m - found
+-- Looking for clock_gettime in rt
+-- Looking for clock_gettime in rt - not found
+-- Looking for subunit_test_start in subunit
+-- Looking for subunit_test_start in subunit - not found
+-- Configuring done
+-- Generating done
+-- Build files have been written to: SHARE/ci/check
+
+==> SHARE/ci/check.build.txt <==
+      |        ^~~~~~~~~~
+In file included from SHARE/oss-src/check/src/../lib/libcompat.h:131:
+<QNX>/target/qnx/usr/include/time.h:86:8: note: originally defined here
+[one line of an SDP header, quoted by the compiler, removed]
+      |        ^~~~~~~~~~
+SHARE/oss-src/check/src/../lib/libcompat.h:270:16: error: conflicting types for 'timer_settime'; have 'int(timer_t,  int,  const struct itimerspec *, struct itimerspec *)' {aka 'int(int,  int,  const struct itimerspec *, struct itimerspec *)'}
+  270 | CK_DLL_EXP int timer_settime(timer_t timerid, int flags,
+      |                ^~~~~~~~~~~~~
+<QNX>/target/qnx/usr/include/time.h:171:12: note: previous declaration of 'timer_settime' with type 'int(timer_t,  int,  const struct itimerspec *, struct itimerspec *)' {aka 'int(int,  int,  const struct itimerspec *, struct itimerspec *)'}
+[one line of an SDP header, quoted by the compiler, removed]
+      |            ^~~~~~~~~~~~~
+gmake[2]: *** [src/CMakeFiles/checkShared.dir/build.make:93: src/CMakeFiles/checkShared.dir/check_error.c.o] Error 1
+gmake[2]: *** [src/CMakeFiles/checkShared.dir/build.make:107: src/CMakeFiles/checkShared.dir/check_list.c.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1181: src/CMakeFiles/checkShared.dir/all] Error 2
+gmake: *** [Makefile:146: all] Error 2
+
+== project 2 of 2: libxml2 (SHARE/oss-src/libxml2); build folder SHARE/ci/libxml2, seen as /mnt/host/ci/libxml2 in the guest
+CMake options: -DLIBXML2_WITH_PYTHON=OFF -DLIBXML2_WITH_ICONV=OFF
+configure or build failed; last lines:
+==> SHARE/ci/libxml2.configure.txt <==
+-- Looking for include file sys/time.h
+-- Looking for include file sys/time.h - found
+-- Looking for include file unistd.h
+-- Looking for include file unistd.h - found
+-- Performing Test XML_SOCKLEN_T_SOCKLEN_T
+-- Performing Test XML_SOCKLEN_T_SOCKLEN_T - Failed
+-- Performing Test XML_SOCKLEN_T_SIZE_T
+-- Performing Test XML_SOCKLEN_T_SIZE_T - Failed
+-- Performing Test XML_SOCKLEN_T_INT
+-- Performing Test XML_SOCKLEN_T_INT - Failed
+-- Looking for include file pthread.h
+-- Looking for include file pthread.h - found
+-- Configuring done
+-- Generating done
+-- Build files have been written to: SHARE/ci/libxml2
+
+==> SHARE/ci/libxml2.build.txt <==
+gmake[2]: *** [CMakeFiles/runxmlconf.dir/build.make:101: runxmlconf] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:254: CMakeFiles/runxmlconf.dir/all] Error 2
+[ 73%] Linking C executable xmllint
+<QNX>/host/linux/x86_64/usr/bin/x86_64-pc-nto-qnx8.0.0-ld: libxml2.so.2.13.5: undefined reference to `xmlModulePlatformClose'
+<QNX>/host/linux/x86_64/usr/bin/x86_64-pc-nto-qnx8.0.0-ld: libxml2.so.2.13.5: undefined reference to `xmlModulePlatformOpen'
+<QNX>/host/linux/x86_64/usr/bin/x86_64-pc-nto-qnx8.0.0-ld: libxml2.so.2.13.5: undefined reference to `xmlModulePlatformSymbol'
+gmake[2]: *** [CMakeFiles/xmllint.dir/build.make:101: xmllint] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:190: CMakeFiles/xmllint.dir/all] Error 2
+[ 74%] Linking C executable runtest
+<QNX>/host/linux/x86_64/usr/bin/x86_64-pc-nto-qnx8.0.0-ld: libxml2.so.2.13.5: undefined reference to `xmlModulePlatformClose'
+<QNX>/host/linux/x86_64/usr/bin/x86_64-pc-nto-qnx8.0.0-ld: libxml2.so.2.13.5: undefined reference to `xmlModulePlatformOpen'
+<QNX>/host/linux/x86_64/usr/bin/x86_64-pc-nto-qnx8.0.0-ld: libxml2.so.2.13.5: undefined reference to `xmlModulePlatformSymbol'
+gmake[2]: *** [CMakeFiles/runtest.dir/build.make:101: runtest] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:222: CMakeFiles/runtest.dir/all] Error 2
+gmake: *** [Makefile:166: all] Error 2
+
+RESULT: 2 project(s), 0 tests in the QNX guest with ctest, 0 failed; 2 project(s) with a build or test failure
+reports: SHARE/oss-results/qnx/
+
+core files: the guest's dumper folder /data/var/dumper is restored
+
+== stop the VM: tools/qnx-vm stop
+qnx-vm: stopped
+tools/qnx-ci.sh exit status 1
+
+== 4. sources unchanged: tracked files changed in each clone after both runs (zlib's own CMake
+   file renames zconf.h in the source folder when it builds in another folder)
+check: 0
+libxml2: 0
+
+== 5. table (counts from the JUnit files that ctest wrote; inner cases from the test output in them)
+| project | QNX run | passed | failed | skipped | Linux run | passed | failed | skipped |
+|---|---|---|---|---|---|---|---|---|
+| check | build failed | - | - | - | 9 | 9 | 0 | 0 |
+| libxml2 | build failed | - | - | - | 8 | 8 | 0 | 0 |
+
+test cases inside the programs (where the output reports them):
+  check: QNX - | Linux Check 1810 checks, 338 failures, 16 errors
+total ctest tests: QNX 0 run, 0 passed, 0 failed, 0 skipped; Linux 17 run, 17 passed, 0 failed, 0 skipped
+
+failed on QNX and passed on Linux: 0

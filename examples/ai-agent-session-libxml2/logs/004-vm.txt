@@ -1,0 +1,4 @@
+== ./run.sh vm status
+run.sh: guest not running
+run.sh: other VMs on ssh port 22349: 0
+run.sh: exit status 0; complete output in results/calls/004-vm.txt

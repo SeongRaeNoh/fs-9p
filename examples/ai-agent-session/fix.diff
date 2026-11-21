@@ -1,0 +1,12 @@
+--- a/src/kvserver.c
++++ b/src/kvserver.c
+@@ -50,7 +50,8 @@
+  * in the receive buffer; the rest is read from the client with MsgRead(). */
+ static int do_put(struct kv_store *st, int rcvid, const struct _msg_info *info, const union kv_recv *m)
+ {
+-    size_t msg_bytes = info->msglen;            /* length of the client's message */
++    size_t msg_bytes = info->srcmsglen;         /* length of the client's message (msglen is only
++                                                   the part that fit into the receive buffer) */
+     if (msg_bytes < sizeof(struct kv_hdr)) return EBADMSG;
+     size_t vlen = msg_bytes - sizeof(struct kv_hdr);
+     if (vlen > KV_VALUE_MAX) return E2BIG;

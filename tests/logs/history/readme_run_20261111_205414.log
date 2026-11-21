@@ -1,0 +1,121 @@
+# fs-9p tests/readme_run.sh, 2026-11-11T20:54:14+09:00, sources sha256 e2f3c8a92dd6 (Makefile src tools image tests)
+=== quick-start block from README.md (run unchanged):
+make                                              # 1. build fs-9p with qcc
+tools/make-image.sh "$IMAGE"                      # 2. QNX 8.0 image (mkqnximage) that starts fs-9p at boot
+tools/qnx-share.sh "$IMAGE" "$SHARE" "$SSH_PORT"  # 3. boot it in QEMU with the shared folder
+
+=== run the block (tmux session; the window becomes the serial console)
+PASS: make, make-image.sh and qnx-share.sh ran; the guest booted ('Startup complete')
+PASS: build/fs-9p and the image (<REPO>/img/readme_image/output) exist
+PASS: boot output: fs-9p mounted the share at /mnt/host
+
+=== serial console (the image starts a shell there): use the share
+PASS: shell on the serial console
+PASS: guest reads the host file
+PASS: host sees the file written in the guest
+
+=== host: qcc builds a program into the share; guest: run it from /mnt/host
+host: qcc -Vgcc_ntox86_64 -o hello hello.c (in SHARE): ok
+PASS: the guest runs the program from the share without a copy
+
+=== guest: the running fs-9p is not root and keeps only two abilities
+PASS: pidin: fs-9p runs with uid 1000 (qnxuser)
+PASS: pidin: 2 abilities for non-root (io, priority), locked
+
+=== guest: kill fs-9p while a file is open, start it again (the order of the video's crash shot)
+PASS: after slay -9 the mountpoint is gone (ls fails)
+PASS: fs-9p started again by hand (exit status 0)
+PASS: a read on the descriptor opened before the kill fails
+PASS: a new open reads the file
+
+=== quit QEMU with Ctrl-a x
+PASS: QEMU quit (exit status 0)
+
+=== tmux window: block output and serial console
+make: Nothing to be done for 'all'.               
+Options changed                                   
+Generating output/build/mount_fs.sh               
+Generating output/build/expandfs.sh               
+Generating output/build/post_startup.sh           
+Generating output/build/start_net.sh              
+Generating output/build/startup.sh                
+Generating output/build/passwd                    
+Generating output/build/group                     
+Generating output/build/shadow                    
+Generating output/build/ifs.build                 
+Generating output/build/system.build              
+Generating output/build/data.build                
+Generating output/build/qemu_options              
+Building disk                                     
+Generating system partition . . .                 
+Generating data partition . . .                   
+Generating ifs . . .                              
+Building boot partition . . .                     
+Building disk . . .                               
+Target type: qemu                                 
+Architecture: x86_64                              
+Security: no                                      
+Repositories:                                     
+    <Q>/qnx800/target/qnx                                     
+Options with non-default values:                  
+For full list of options, run "mkqnximage --options"                                                
+make-image: image ready in <REPO>/img/readme_image/output; start it with: tools/qnx-share.sh <REPO>/img/readme_image SHARE_FOLDER                       
+non UEFI or UEFI+CSM boot                         
+ACPI table not found (0x4746434d)                 
+overriding mask for controller 2, vector_base 0   
+---> Starting slogger2                            
+---> Starting PCI Services                        
+# ---> Starting fsevmgr                           
+---> Starting devb                                
+Path=0 - Intel 82371SB                            
+ target=0 lun=0     Direct-Access(0) -          QEMU HARDDISK    Rev: 2.5+                          
+Path=1 - Intel 82371SB                            
+ target=0 lun=0            CD-ROM(5) - QEMU     QEMU DVD-ROM     Rev: 2.5+                          
+---> Mounting file systems                        
+---> Mounting file systems                        
+---> Starting Networking                          
+---> Starting sshd                                
+[line removed: image boot message]
+---> Starting misc                                
+---> Starting fs-9p                               
+fs-9p: running as uid 1000 gid 1000; abilities kept for non-root: io, priority                      
+fs-9p 0.5.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21), 16 request slots)                                   
+To exit QEMU, type <ctrl>a x                      
+Process count:23                                  
+Startup complete                                  
+QNX noname 8.0.0 2026/06/05-16:26:03EDT x86pc x86_64                                                
+id; echo "R0=$((20+1))"                           
+uid=0(root) gid=0(root) groups=0(root)            
+R0=21                                             
+# ls -l /mnt/host; cat /mnt/host/readme_check.txt; echo "written in the guest" > /mnt/host/from_guest.txt; echo "R1=$((40+2))"                                                                          
+total 8                                           
+drwxrwxr-x  2 qnxuser qnxuser 4096 2026-11-11 11:53 demo                                            
+-rw-rw-r--  1 qnxuser qnxuser   41 2026-11-11 11:54 readme_check.txt                                
+written on the host for the README check          
+R1=42                                             
+# /mnt/host/hello; echo "R2=$((1+2))"             
+hello from a program built on the host            
+R2=3                                              
+# pidin -p fs-9p -F "%a %n %U %W"; pidin -p fs-9p abilities | grep -E " [R-]N[L-][I-]"; echo "R3=$((2+5))"                                                                                              
+     pid name                                                                                    uid       euid                                                                                         
+  286739 system/bin/fs-9p                                                                       1000       1000                                                                                         
+                     io  RNL-                     
+               priority  RNL-                     
+R3=7                                              
+# exec 3< /mnt/host/readme_check.txt; slay -9 fs-9p; sleep 1; ls /mnt/host; echo "R4=$?"            
+ls: /mnt/host: No such file or directory          
+R4=1                                              
+# /system/bin/fs-9p -d -U qnxuser; echo "R5=$?"   
+fs-9p: running as uid 1000 gid 1000; abilities kept for non-root: io, priority                      
+fs-9p 0.5.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21), 16 request slots)                                   
+R5=0                                              
+# read -r x <&3; echo "R6=$?"; cat /mnt/host/readme_check.txt; echo "R7=$((3+4))"                   
+ksh: <&3 : bad file descriptor                    
+R6=1                                              
+written on the host for the README check          
+R7=7                                              
+# QEMU: Terminated                                
+BLOCK-EXITED status=0                             
+
+RESULT: 14 passed, 0 failed
+readme_rc=0

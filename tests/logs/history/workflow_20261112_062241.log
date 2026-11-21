@@ -1,0 +1,95 @@
+# fs-9p developer workflow demo, 2026-11-12T06:22:41+09:00, sources sha256 52ee0000bee9 (tests/srchash.sh)
+
+### 0. The QNX guest mounts the host folder with fs-9p (once per boot)
+
+qnx:/mnt/host/demo# ls /mnt/host >/dev/null 2>&1 || /tmp/fs9p/fs-9p -d; ls -ld /mnt/host
+drwxrwxr-x  9 qnxuser qnxuser 4096 2026-11-11 21:22 /mnt/host
+
+### 1. Host: write a C file into the shared folder
+
+host:share/demo$ cat > hello.c <<'EOF'
+#include <stdio.h>
+#include <sys/utsname.h>
+
+int main(void)
+{
+    struct utsname u;
+    uname(&u);
+    printf("Hello from %s %s on %s - version 1\n", u.sysname, u.release, u.nodename);
+    return 0;
+}
+EOF
+cp hello.c hello.c.v1; cat hello.c
+#include <stdio.h>
+#include <sys/utsname.h>
+
+int main(void)
+{
+    struct utsname u;
+    uname(&u);
+    printf("Hello from %s %s on %s - version 1\n", u.sysname, u.release, u.nodename);
+    return 0;
+}
+
+### 2. Host: build it with the QNX toolchain (qcc), output into the shared folder
+
+host:share/demo$ rm -f hello; qcc -Vgcc_ntox86_64 -Wall -o hello hello.c && ls -l hello | awk '{print $1, $5, $NF}'
+-rwxrwxr-x 9320 hello
+
+### 3. Guest: run it straight from /mnt/host - nothing was copied into the guest
+
+qnx:/mnt/host/demo# ls -l /mnt/host/demo
+total 18
+-rwxrwxr-x  1 qnxuser qnxuser 9320 2026-11-11 21:22 hello
+-rw-rw-r--  1 qnxuser qnxuser  201 2026-11-11 21:22 hello.c
+-rw-rw-r--  1 qnxuser qnxuser  201 2026-11-11 21:22 hello.c.v1
+
+qnx:/mnt/host/demo# ./hello
+Hello from QNX 8.0.0 on qnxqemu - version 1
+
+### 4. Host: edit the source (version 2 also prints the process id) and build again
+
+host:share/demo$ sed -i -e 's/version 1/version 2/' -e 's/^    return 0;/    printf("my process id is %d\\n", (int)getpid());\n    return 0;/' -e 's/^#include <stdio.h>/#include <stdio.h>\n#include <unistd.h>/' hello.c; diff -u hello.c.v1 hello.c | tail -n +3
+@@ -1,10 +1,12 @@
+ #include <stdio.h>
++#include <unistd.h>
+ #include <sys/utsname.h>
+ 
+ int main(void)
+ {
+     struct utsname u;
+     uname(&u);
+-    printf("Hello from %s %s on %s - version 1\n", u.sysname, u.release, u.nodename);
++    printf("Hello from %s %s on %s - version 2\n", u.sysname, u.release, u.nodename);
++    printf("my process id is %d\n", (int)getpid());
+     return 0;
+ }
+
+host:share/demo$ qcc -Vgcc_ntox86_64 -Wall -o hello hello.c && ls -l hello | awk '{print $1, $5, $NF}'
+-rwxrwxr-x 9352 hello
+
+### 5. Guest: run the new build at once
+
+qnx:/mnt/host/demo# ./hello
+Hello from QNX 8.0.0 on qnxqemu - version 2
+my process id is 5242906
+
+### 6. Guest: write a result file; the host reads it
+
+qnx:/mnt/host/demo# ./hello > result.txt; echo exit status $?
+exit status 0
+
+host:share/demo$ cat result.txt
+Hello from QNX 8.0.0 on qnxqemu - version 2
+my process id is 5279771
+
+### 7. Host: the same run as one host command; tools/qnx-run returns the program's output and exit status
+
+host:share/demo$ qnx-run ./hello; echo "exit status $?"
+Hello from QNX 8.0.0 on qnxqemu - version 2
+my process id is 5316635
+exit status 0
+
+### done: edit, build and run without copying the program into the guest
+
+host:share/demo$ rm -f hello hello.c hello.c.v1 result.txt

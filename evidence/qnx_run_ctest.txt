@@ -1,0 +1,161 @@
+# fs-9p guest tests, 2026-11-13, sources sha256 ac061f948768 (tests/srchash.sh)
+=== tools/qnx-run: make and ctest on this machine run the unit tests of examples/qnx-unit inside the guest, from the share
+QNX 8.0.0
+exit status 0
+PASS: qnx-run uname -sr: a guest command, its output and exit status 0 on the host
+  make: Entering directory 'SHARE/qnx-unit'
+  mkdir -p build
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -std=gnu11 -o build/test_ring SHARE/qnx-unit/tests/test_ring.c
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -std=gnu11 -o build/test_msg SHARE/qnx-unit/tests/test_msg.c
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -std=gnu11 -o build/test_pulse SHARE/qnx-unit/tests/test_pulse.c
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -std=gnu11 -o build/exit_status SHARE/qnx-unit/tests/exit_status.c
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -std=gnu11 -o build/stuck_receive SHARE/qnx-unit/tests/stuck_receive.c
+  == test_ring (in the QNX guest)
+  ok 1 - empty ring: get fails
+  ok 2 - 8 puts into an empty ring succeed
+  ok 3 - put into a full ring fails
+  ok 4 - gets return the values in order
+  ok 5 - the indexes wrap around correctly
+  5 of 5 checks passed
+  == test_msg (in the QNX guest)
+  ok 1 - default channel: ChannelCreate
+  ok 2 - default channel: server thread at priority 10
+  ok 3 - default channel: ConnectAttach
+  ok 4 - default channel: client thread at priority 30
+  ok 5 - default channel: MsgSend gets the reply "HELLO QNX"
+  ok 6 - default channel: the server thread ran at priority 30 while serving (expected 30)
+  ok 7 - default channel: MsgError(ENOTSUP) reaches the client as errno ENOTSUP
+  ok 8 - fixed-priority channel: ChannelCreate
+  ok 9 - fixed-priority channel: server thread at priority 10
+  ok 10 - fixed-priority channel: ConnectAttach
+  ok 11 - fixed-priority channel: client thread at priority 30
+  ok 12 - fixed-priority channel: MsgSend gets the reply "HELLO QNX"
+  ok 13 - fixed-priority channel: the server thread ran at priority 10 while serving (expected 10)
+  ok 14 - fixed-priority channel: MsgError(ENOTSUP) reaches the client as errno ENOTSUP
+  14 of 14 checks passed
+  == test_pulse (in the QNX guest)
+  ok 1 - channel and connection
+  ok 2 - MsgSendPulse(code 5, value 1234)
+  ok 3 - MsgReceive returns the pulse: rcvid 0, code 5, value 1234
+  ok 4 - queued pulses come out by priority: code 2 (priority 20), then code 1 (priority 10)
+  ok 5 - timer_create with a pulse event
+  ok 6 - timer_settime (one shot)
+  ok 7 - the timer delivers its pulse: code 6, value 77
+  7 of 7 checks passed
+  == exit_status 3 (must return 3)
+  exit_status: stdout line
+  exit_status: stderr line
+  exit status 3 reached make
+  == exit_status 0 with the host path of a file in B (host path argument)
+  exit_status: stderr line
+  exit_status: stdout line
+  exit_status: open /mnt/host/qnx-unit/build/exit_status: ok
+  qnx-test: 0 failed
+  make: Leaving directory 'SHARE/qnx-unit'
+  make exit status 0
+PASS: make qnx-test: test_ring, test_msg and test_pulse passed in the guest (26 checks, 0 failed)
+PASS: make qnx-test: exit status 3 and the stderr line of a guest program reached the host
+PASS: a host path argument inside the share reached the program as /mnt/host/qnx-unit/build/exit_status
+PASS: JUnit files: 3 written on the host, each with failures="0"
+PASS: qnx-run -j on a program that exits with 3: exit status 3 and a JUnit failure element
+  == test_ring (in the QNX guest, with gcov counters)
+  5 of 5 checks passed
+  == test_msg (in the QNX guest, with gcov counters)
+  14 of 14 checks passed
+  == test_pulse (in the QNX guest, with gcov counters)
+  7 of 7 checks passed
+  coverage: 3 .gcda files written by the guest into build/cov
+  ------------------------------------------------------------------------------
+                             GCC Code Coverage Report
+  Directory: .
+  ------------------------------------------------------------------------------
+  File                                         Lines     Exec  Cover   Missing
+  ------------------------------------------------------------------------------
+  tests/test_msg.c                                43       43   100%
+  tests/test_pulse.c                              24       24   100%
+  tests/test_ring.c                               16       16   100%
+  ------------------------------------------------------------------------------
+  TOTAL                                           83       83   100%
+  ------------------------------------------------------------------------------
+  coverage: HTML report build/cov/html/index.html
+  coverage: 0 failed
+  make exit status 0
+PASS: make coverage: the 3 tests ran in the guest with gcov counters; 3 .gcda files appeared in the host build folder through the share
+PASS: coverage report on the host from the guest's .gcda files (TOTAL 83 83 100%)
+cmake: cmake version 3.31.6
+  [100%] Built target test_pulse
+  [100%] Built target test_msg
+  cmake exit status 0
+PASS: CTestTestfile.cmake runs every test through tools/qnx-run (CMAKE_CROSSCOMPILING_EMULATOR)
+  Test project SHARE/qnx-unit/cbuild
+      Start 1: test_ring
+  1/5 Test #1: test_ring ........................   Passed
+      Start 2: test_msg
+  2/5 Test #2: test_msg .........................   Passed
+      Start 3: test_pulse
+  3/5 Test #3: test_pulse .......................   Passed
+      Start 4: runner_exit_status
+  4/5 Test #4: runner_exit_status ...............   Passed
+      Start 5: runner_host_path_argument
+  5/5 Test #5: runner_host_path_argument ........   Passed
+  
+  100% tests passed, 0 tests failed out of 5
+  
+  ctest exit status 0
+PASS: ctest: 5 of 5 tests passed, each run inside the guest (runner_exit_status passes because its program exits with 3)
+PASS: ctest --output-junit: junit.xml with 5 tests, 0 failures
+
+=== tools/qnx-run stops the guest program: time limit (-t), SIGINT and SIGTERM to qnx-run, ctest TIMEOUT
+  stuck_receive: a process waits in MsgReceive()
+  stuck_receive: a process waits in MsgReceive()
+  exit status 124
+PASS: qnx-run -t 3: exit status 124; the program and its child (2 processes in MsgReceive) were stopped, 0 left in the guest when qnx-run returned
+  stuck_receive: a process waits in MsgReceive()
+  stuck_receive: a process waits in MsgReceive()
+  bash: line 23: 9699355 kill                       '/mnt/host/qnx-unit/build/stuck_receive' 'ignore-term' 'fork' < /dev/null 3>&-
+  exit status 124
+PASS: qnx-run -t 3, program ignores SIGTERM: SIGKILL 2 s after SIGTERM; exit status 124, 0 left
+  stuck_receive: a process waits in MsgReceive()
+  stuck_receive: a process waits in MsgReceive()
+  exit status 124
+  uid of the stuck_receive processes while they waited: 1000 
+PASS: qnx-run -t 3 -u qnxuser: the program and its child ran as uid 1000 (not root); exit status 124, 0 left
+  stuck_receive: a process waits in MsgReceive()
+  stuck_receive: a process waits in MsgReceive()
+  exit status 130
+PASS: SIGINT to qnx-run while the program waits: exit status 130; qnx-run returned after the guest had stopped both processes (0 left)
+  stuck_receive: a process waits in MsgReceive()
+  stuck_receive: a process waits in MsgReceive()
+  exit status 143
+PASS: SIGTERM to qnx-run while the program waits: exit status 143; qnx-run returned after the guest had stopped both processes (0 left)
+  cmake exit status 0
+  Test project SHARE/qnx-unit/cbuild-timeout
+      Start 6: runner_timeout
+  1/1 Test #6: runner_timeout ...................***Timeout
+  
+  0% tests passed, 1 tests failed out of 1
+  
+  
+  The following tests FAILED:
+  	  6 - runner_timeout (Timeout)
+  Errors while running CTest
+  Output from these tests are in: SHARE/qnx-unit/cbuild-timeout/Testing/Temporary/LastTest.log
+  Use "--rerun-failed --output-on-failure" to re-run the failed cases verbosely.
+  ctest exit status 8
+PASS: ctest TIMEOUT 5 (test runner_timeout = stuck_receive fork): ctest reported Timeout and ended qnx-run; the guest then stopped both processes (0 left; checked once a second, at most 10 times)
+
+=== tools/qnx-run --json: one JSON line with the exit status, signal, time limit, output and output files
+  {"program":"SHARE/qnx-unit/build/exit_status","guest_program":"/mnt/host/qnx-unit/build/exit_status","exit_status":3,"signal":null,"signal_name":null,"timed_out":false,"time_limit_s":60,"host_signal":null,"stdout":"exit_status: stdout line\n","stdout_bytes":25,"stdout_truncated":false,"stderr":"exit_status: stderr line\n","stderr_bytes":25,"stderr_truncated":false,"stdout_file":"REPO/tests/work/j1out/stdout.txt","stderr_file":"REPO/tests/work/j1out/stderr.txt","core_file":null,"junit_file":null,"error":null}
+  exit status 3
+  {"program":"SHARE/qnx-unit/build/stuck_receive","guest_program":"/mnt/host/qnx-unit/build/stuck_receive","exit_status":124,"signal":null,"signal_name":null,"timed_out":true,"time_limit_s":2,"host_signal":null,"stdout":"stuck_receive: a process waits in MsgReceive()\n","stdout_bytes":47,"stdout_truncated":false,"stderr":"","stderr_bytes":0,"stderr_truncated":false,"stdout_file":"REPO/tests/work/j2out/stdout.txt","stderr_file":"REPO/tests/work/j2out/stderr.txt","core_file":null,"junit_file":null,"error":null}
+  exit status 124
+  {"program":"SHARE/qnx-unit/build/exit_status","guest_program":"/mnt/host/qnx-unit/build/exit_status","exit_status":124,"signal":null,"signal_name":null,"timed_out":false,"time_limit_s":0,"host_signal":null,"stdout":"exit_status: stdout line\n","stdout_bytes":25,"stdout_truncated":false,"stderr":"exit_status: stderr line\n","stderr_bytes":25,"stderr_truncated":false,"stdout_file":"REPO/tests/work/j3out/stdout.txt","stderr_file":"REPO/tests/work/j3out/stderr.txt","core_file":null,"junit_file":null,"error":null}
+  exit status 124
+  {"program":"SHARE/qnx-unit/build/exit_status","guest_program":"/mnt/host/qnx-unit/build/exit_status","exit_status":124,"signal":null,"signal_name":null,"timed_out":false,"time_limit_s":60,"host_signal":null,"stdout":"exit_status: stdout line\n","stdout_bytes":25,"stdout_truncated":false,"stderr":"exit_status: stderr line\n","stderr_bytes":25,"stderr_truncated":false,"stdout_file":"REPO/tests/work/j4out/stdout.txt","stderr_file":"REPO/tests/work/j4out/stderr.txt","core_file":null,"junit_file":"tests/work/j4.xml","error":null}
+  exit status 124
+json1 ok
+json2 ok
+json3 ok
+PASS: qnx-run --json, program exits with 3: valid JSON; exit_status 3, signal null, timed_out false, stdout and stderr lines; stdout_file holds the same text
+PASS: qnx-run --json -t 2 on stuck_receive: exit_status 124, timed_out true (reported by the guest), its output line; 0 left in the guest
+PASS: qnx-run --json, program exits with 124 by itself: timed_out false without -t and with -t 60; the JUnit file (-j) names an exit-status failure, not a timeout

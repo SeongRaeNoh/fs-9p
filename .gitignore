@@ -1,0 +1,21 @@
+# build outputs
+build/
+*.o
+*.gcda
+*.gcno
+*.core
+__pycache__/
+*.pyc
+
+# local settings (paths of the test machine, keys) and work folders of the tests and demos
+env.local
+tests/env.local
+examples/ai-agent-session/env.local
+tests/work/
+tests/work_readme/
+tests/work_quickstart/
+share/
+share2/
+img/
+fs9p-image/
+qnx-share/

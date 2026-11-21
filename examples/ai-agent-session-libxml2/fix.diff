@@ -1,0 +1,16 @@
+diff --git a/xmlreader.c b/xmlreader.c
+index 2878615..6076542 100644
+--- a/xmlreader.c
++++ b/xmlreader.c
+@@ -2085,6 +2085,11 @@ xmlNewTextReaderFilename(const char *URI) {
+     xmlParserInputBufferPtr input;
+     xmlTextReaderPtr ret;
+ 
++    if (URI == NULL) {
++        xmlTextReaderErr(XML_ERR_ARGUMENT, "invalid argument");
++        return(NULL);
++    }
++
+     if (xmlParserInputBufferCreateFilenameValue != NULL) {
+         input = xmlParserInputBufferCreateFilenameValue(URI,
+                 XML_CHAR_ENCODING_NONE);

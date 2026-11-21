@@ -1,0 +1,59 @@
+# fs-9p guest tests, 2026-11-13, sources sha256 ac061f948768 (tests/srchash.sh)
+# symbolic links through fs-9p (lstat, stat, readlink, symlink, unlink, links inside paths, a loop, an absolute target), statvfs, and a versioned shared library (libx.so -> libx.so.1 -> libx.so.1.0) loaded by the guest from the share
+=== symbolic links (Treadlink, Tsymlink, redirect of the open) and statvfs (Tstatfs) in SHARE/links (tests/link_test.c)
+links made on the host: abs_null -> /dev/null, chain1 -> chain2, chain2 -> target.txt, dangling -> no_such_file, dirlink -> sub, link.txt -> target.txt, loop_a -> loop_b, loop_b -> loop_a, sub/innerlink -> inner.txt, up/back -> ../sub
+STEP lstat_link_is_link rc=0 errno=0 (ok) S_ISLNK=1 size=10
+STEP stat_link_follows_to_file rc=0 errno=0 (ok) S_ISREG=1 size=15
+STEP readlink_link rc=0 errno=0 (ok) target "target.txt" (as expected)
+STEP read_through_link rc=0 errno=0 (ok) content as expected
+STEP read_through_two_links rc=0 errno=0 (ok) content as expected
+STEP read_through_folder_link rc=0 errno=0 (ok) content as expected
+STEP read_through_link_with_dotdot rc=0 errno=0 (ok) content as expected
+STEP readlink_below_folder_link rc=0 errno=0 (ok) target "inner.txt" (as expected)
+STEP stat_folder_link_is_folder rc=0 errno=0 (ok)
+STEP stat_dangling_ENOENT rc=0 errno=2 (No such file or directory) expected errno 2 (No such file or directory): yes
+STEP lstat_dangling_is_link rc=0 errno=0 (ok)
+STEP open_loop_ELOOP rc=0 errno=90 (Too many levels of symbolic links or prefixes) expected errno 90 (Too many levels of symbolic links or prefixes): yes
+STEP write_through_absolute_link_to_dev_null rc=0 errno=0 (ok)
+STEP symlink_create rc=0 errno=0 (ok)
+STEP readlink_made_link rc=0 errno=0 (ok) target "target.txt" (as expected)
+STEP read_through_made_link rc=0 errno=0 (ok) content as expected
+STEP symlink_existing_EEXIST rc=0 errno=17 (File exists) expected errno 17 (File exists): yes
+STEP symlink_create_folder_link rc=0 errno=0 (ok)
+STEP create_file_through_folder_link rc=0 errno=0 (ok)
+STEP mkdir_through_folder_link rc=0 errno=0 (ok)
+STEP unlink_removes_link rc=0 errno=0 (ok)
+STEP lstat_after_unlink_ENOENT rc=0 errno=2 (No such file or directory) expected errno 2 (No such file or directory): yes
+STEP target_still_there rc=0 errno=0 (ok)
+STEP unlink_below_folder_link rc=0 errno=0 (ok)
+STEP statvfs rc=0 errno=0 (ok) 9p
+STEP fstatvfs_of_a_file rc=0 errno=0 (ok)
+PASS: lstat sees the link itself, stat and read follow it, readlink gives the target
+PASS: a chain of two links, a folder link in the middle of a path, a target with '..', readlink below a folder link
+PASS: a dangling link gives ENOENT (lstat still sees the link); a link loop ends with ELOOP, no hang
+PASS: an absolute target is resolved in the guest's namespace (abs_null -> /dev/null)
+PASS: symlink() in the guest makes links on the host (made_link -> target.txt, made_dirlink -> sub); EEXIST for an existing name
+PASS: a file and a folder created through the folder link made_dirlink appear in sub on the host
+PASS: unlink removes the link, not its target (also below a folder link)
+ls -l in the guest, link lines (type and permissions, name, target):
+  lrwxrwxrwx abs_null -> /dev/null
+  lrwxrwxrwx chain1 -> chain2
+  lrwxrwxrwx chain2 -> target.txt
+  lrwxrwxrwx dangling -> no_such_file
+  lrwxrwxrwx dirlink -> sub
+  lrwxrwxrwx link.txt -> target.txt
+  lrwxrwxrwx loop_a -> loop_b
+  lrwxrwxrwx loop_b -> loop_a
+  lrwxrwxrwx made_dirlink -> sub
+statvfs in the guest vs statfs of SHARE on the host: total bytes (size free), file nodes equal, name length equal; f_basetype 9p
+PASS: statvfs() and fstatvfs() answer from the host folder: total bytes equal (within one block), free bytes within 2 %, file nodes and name length equal
+
+=== a versioned shared library in the share: libx.so -> libx.so.1 -> libx.so.1.0 built with qcc on this machine; uselib loads it in the guest from /mnt/host/solib
+PASS: qcc: libx.so.1.0 (soname libx.so.1), links libx.so.1 and libx.so, uselib linked with -lx
+uselib needs: libx.so.1
+  lrwxrwxrwx libx.so -> libx.so.1
+  lrwxrwxrwx libx.so.1 -> libx.so.1.0
+  linked with -lx: libx 1.0
+  dlopen("libx.so"): ok, x_version() = 1
+  exit status 0
+PASS: tools/qnx-run -e LD_LIBRARY_PATH=SHARE/solib: the guest's loader found libx.so.1 and dlopen found libx.so, both through links in the share

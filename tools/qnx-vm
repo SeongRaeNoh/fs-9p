@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# tools/qnx-vm - run the QNX 8.0 image of tools/make-image.sh in the background, with a host folder
+# shared over virtio-9p, so that tools/qnx-run, make and ctest can use the guest from any terminal.
+#
+# usage: tools/qnx-vm start [IMAGE_DIR [SHARE_FOLDER [SSH_PORT]]]
+#        tools/qnx-vm stop|status|console [IMAGE_DIR]
+#   start    start QEMU with tools/qnx-share.sh in the background and wait until the guest
+#            answers on ssh and fs-9p has mounted the share (at most QNX_VM_WAIT seconds,
+#            default 180)
+#   stop     stop QEMU (the disk is opened with snapshot=on, so nothing in the image changes,
+#            unless QNX_DISK is set; see tools/qnx-share.sh)
+#   status   say whether the VM runs, with its share, port and ssh state
+#   console  print the serial console output (boot messages, fs-9p lines)
+# Defaults: IMAGE_DIR = $QNX_IMAGE, SHARE_FOLDER = $QNX_SHARE, SSH_PORT = $QNX_SSH_PORT or 2222.
+# State files: IMAGE_DIR/qnx-vm/ (qemu.pid, share, port, console.log, console.log.sock).
+# tools/qnx-run reads share and port from there when QNX_IMAGE is set and QNX_SHARE is not.
+# ssh: as root to 127.0.0.1:SSH_PORT with the key that tools/make-image.sh put into the image
+# (QNX_SSH_KEY selects the private key file; default: ssh's own default keys).
+# Copyright 2026 The fs-9p authors. Licensed under the Apache License, Version 2.0.
+set -u
+me=qnx-vm
+die() { echo "$me: $*" >&2; exit 1; }
+REPO=$(cd "$(dirname "$0")/.." && pwd)
+cmd=${1:-}
+[ $# -gt 0 ] && shift
+IMG=${1:-${QNX_IMAGE:-}}
+[ -n "$IMG" ] || die "usage: tools/qnx-vm start|stop|status|console IMAGE_DIR (or set QNX_IMAGE)"
+[ -d "$IMG" ] || die "$IMG is not a folder"
+IMG=$(cd "$IMG" && pwd)
+D=$IMG/qnx-vm
+PIDF=$D/qemu.pid
+
+running() { [ -f "$PIDF" ] && kill -0 "$(cat "$PIDF")" 2>/dev/null; }
+gssh() {   # gssh PORT COMMAND: run COMMAND in the guest as root
+    local key=()
+    [ -n "${QNX_SSH_KEY:-}" ] && key=(-i "$QNX_SSH_KEY")
+    ssh "${key[@]}" -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        -o LogLevel=ERROR -o ConnectTimeout=5 -p "$1" root@127.0.0.1 "$2" </dev/null
+}
+
+case "$cmd" in
+start)
+    SHARE=${2:-${QNX_SHARE:-}}
+    PORT=${3:-${QNX_SSH_PORT:-2222}}
+    [ -n "$SHARE" ] || die "usage: tools/qnx-vm start IMAGE_DIR SHARE_FOLDER [SSH_PORT] (or set QNX_SHARE)"
+    running && die "already running (pid $(cat "$PIDF")); tools/qnx-vm stop $IMG first"
+    mkdir -p "$D" "$SHARE"
+    SHARE=$(cd "$SHARE" && pwd)
+    echo "$SHARE" > "$D/share"; echo "$PORT" > "$D/port"
+    rm -f "$D/console.log" "$D/console.log.sock"
+    # setsid: QEMU gets its own session and keeps running after this terminal closes.
+    # qnx-share.sh ends with exec, so the pid of the background job is QEMU's pid.
+    QNX_CONSOLE_LOG=$D/console.log setsid "$REPO/tools/qnx-share.sh" "$IMG" "$SHARE" "$PORT" \
+        > "$D/qemu.out" 2>&1 < /dev/null &
+    echo $! > "$PIDF"
+    echo "$me: QEMU started (pid $(cat "$PIDF")); share $SHARE; ssh port $PORT"
+    n=0; max=${QNX_VM_WAIT:-180}
+    while :; do
+        running || { echo "$me: QEMU ended; its output:" >&2; cat "$D/qemu.out" >&2; rm -f "$PIDF"; exit 1; }
+        if gssh "$PORT" 'test -d /mnt/host && ls /mnt/host >/dev/null' 2>/dev/null; then
+            echo "$me: ready: the guest answers on ssh and /mnt/host is mounted"
+            grep -a -m1 'fs-9p .*mounted at' "$D/console.log" 2>/dev/null | tr -d '\r'
+            exit 0
+        fi
+        n=$((n + 3))
+        if [ "$n" -ge "$max" ]; then
+            echo "$me: no ssh login with /mnt/host after $max seconds; the VM keeps running." >&2
+            echo "$me: check the console (tools/qnx-vm console $IMG) and the image's ssh key (SSH_IDENT of make-image.sh)" >&2
+            exit 1
+        fi
+        sleep 3
+    done ;;
+stop)
+    running || { echo "$me: not running"; rm -f "$PIDF"; exit 0; }
+    pid=$(cat "$PIDF")
+    kill "$pid"
+    for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+    kill -0 "$pid" 2>/dev/null && kill -9 "$pid"
+    rm -f "$PIDF" "$D/console.log.sock"
+    echo "$me: stopped" ;;
+status)
+    if running; then
+        PORT=$(cat "$D/port")
+        echo "$me: running (pid $(cat "$PIDF")); share $(cat "$D/share"); ssh port $PORT"
+        if gssh "$PORT" 'test -d /mnt/host' 2>/dev/null; then echo "$me: ssh login works; /mnt/host is mounted"
+        else echo "$me: ssh login or /mnt/host not available"; fi
+    else
+        echo "$me: not running"; exit 3
+    fi ;;
+console)
+    [ -f "$D/console.log" ] || die "no console log in $D"
+    tr -d '\r' < "$D/console.log" ;;
+*)
+    die "usage: tools/qnx-vm start|stop|status|console [IMAGE_DIR] [SHARE_FOLDER [SSH_PORT]]" ;;
+esac

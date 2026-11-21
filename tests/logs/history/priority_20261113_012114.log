@@ -1,0 +1,498 @@
+# fs-9p priority demo, 2026-11-13, sources sha256 352c129bfa44 (tests/srchash.sh)
+# guest: QNX 8.0.0, 4 processors
+
+### 0. Stop running fs-9p instances; test files on the host: SLOW_SHARE/data.bin and SHARE/prio_demo/data.bin (2 MiB each)
+fs-9p processes running: 0
+
+### 1.a. fixed interrupt-thread priority (-f): pidin while a reader at priority 40 waits
+
+qnx# fs-9p -d -v -f -a slow -m /mnt/slow
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, fixed), 16 request slots)
+
+qnx# on -p 40 sh -c "dd if=/mnt/slow/data.bin bs=128k | md5sum" &   # a reader at priority 40
+qnx# pidin -p dd; pidin -p fs-9p
+     pid tid name                         prio STATE          Blocked                     
+ 1015839   1 proc/boot/dd                  40r REPLY          966685                      
+     pid tid name                         prio STATE          Blocked                     
+  966685   1 tmp/fs9p/fs-9p                10r SIGWAITINFO                                
+  966685   2 tmp/fs9p/fs-9p                21f INTR                                       
+  966685   3 tmp/fs9p/fs-9p                10r RECEIVE        1                           
+  966685   4 tmp/fs9p/fs-9p                40r CONDVAR        (0x207111b430)              
+  966685   5 tmp/fs9p/fs-9p                40r RECEIVE        1                           
+  966685   6 tmp/fs9p/fs-9p                40r RECEIVE        1                           
+# interrupt thread (the fs-9p thread in state INTR): priority 21
+
+qnx# cat prio_md5.txt   # md5sum of the data the reader got (the host's md5 in brackets)
+3764fdab631cdf888bb651c62fe5f2ee  (host: 3764fdab631cdf888bb651c62fe5f2ee)
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/slow (28 9P requests, 0 Rlerror, 26 interrupts, 2 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 0 waits for a free slot, 0 by a client above every slot owner, highest waiting 0, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 0 times, highest 21; set below the base 0 times, lowest 21; 0 priority changes failed
+
+### 1.b. default: the interrupt thread follows the client: pidin while a reader at priority 40 waits
+
+qnx# fs-9p -d -v -a slow -m /mnt/slow
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+
+qnx# on -p 40 sh -c "dd if=/mnt/slow/data.bin bs=128k | md5sum" &   # a reader at priority 40
+qnx# pidin -p dd; pidin -p fs-9p
+     pid tid name                         prio STATE          Blocked                     
+ 1232927   1 proc/boot/dd                  40r REPLY          1183773                     
+     pid tid name                         prio STATE          Blocked                     
+ 1183773   1 tmp/fs9p/fs-9p                10r SIGWAITINFO                                
+ 1183773   2 tmp/fs9p/fs-9p                40f INTR                                       
+ 1183773   3 tmp/fs9p/fs-9p                10r RECEIVE        1                           
+ 1183773   4 tmp/fs9p/fs-9p                40r RECEIVE        1                           
+ 1183773   5 tmp/fs9p/fs-9p                40r CONDVAR        (0x26fb0af430)              
+ 1183773   6 tmp/fs9p/fs-9p                40r RECEIVE        1                           
+# interrupt thread (the fs-9p thread in state INTR): priority 40
+
+qnx# cat prio_md5.txt   # md5sum of the data the reader got (the host's md5 in brackets)
+3764fdab631cdf888bb651c62fe5f2ee  (host: 3764fdab631cdf888bb651c62fe5f2ee)
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/slow (28 9P requests, 0 Rlerror, 28 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 0 waits for a free slot, 0 by a client above every slot owner, highest waiting 0, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 25 times, highest 40; set below the base 1 times, lowest 10; 0 priority changes failed
+
+### 2.a, run 1 of 5. fs-9p -f: a reader at priority 40 next to 8 CPU-bound loops at priority 30
+
+qnx# fs-9p -d -v -f -a hostshare -m /mnt/host
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, fixed), 16 request slots)
+
+qnx# on -p 40 sh load_read.sh 30   # 8 loops at 30, then a 2 MiB read at 40
+6276d7218cd5662ab36a8b96b9d62e08  (host: 6276d7218cd5662ab36a8b96b9d62e08)
+loops that had ended when the read finished: 0 of 8
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/host (27 9P requests, 0 Rlerror, 3 interrupts, 0 found after unmask, 24 reaped by waiters, 0 lost, at most 1 requests in flight; 0 waits for a free slot, 0 by a client above every slot owner, highest waiting 0, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 0 times, highest 21; set below the base 0 times, lowest 21; 0 priority changes failed
+
+### 2.b, run 1 of 5. fs-9p (default): a reader at priority 40 next to 8 CPU-bound loops at priority 30
+
+qnx# fs-9p -d -v -a hostshare -m /mnt/host
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+
+qnx# on -p 40 sh load_read.sh 30   # 8 loops at 30, then a 2 MiB read at 40
+6276d7218cd5662ab36a8b96b9d62e08  (host: 6276d7218cd5662ab36a8b96b9d62e08)
+loops that had ended when the read finished: 0 of 8
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/host (27 9P requests, 0 Rlerror, 27 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 0 waits for a free slot, 0 by a client above every slot owner, highest waiting 0, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 24 times, highest 40; set below the base 1 times, lowest 10; 0 priority changes failed
+
+### 2.a, run 2 of 5. fs-9p -f: a reader at priority 40 next to 8 CPU-bound loops at priority 30
+
+qnx# fs-9p -d -v -f -a hostshare -m /mnt/host
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, fixed), 16 request slots)
+
+qnx# on -p 40 sh load_read.sh 30   # 8 loops at 30, then a 2 MiB read at 40
+6276d7218cd5662ab36a8b96b9d62e08  (host: 6276d7218cd5662ab36a8b96b9d62e08)
+loops that had ended when the read finished: 0 of 8
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/host (27 9P requests, 0 Rlerror, 3 interrupts, 0 found after unmask, 24 reaped by waiters, 0 lost, at most 1 requests in flight; 0 waits for a free slot, 0 by a client above every slot owner, highest waiting 0, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 0 times, highest 21; set below the base 0 times, lowest 21; 0 priority changes failed
+
+### 2.b, run 2 of 5. fs-9p (default): a reader at priority 40 next to 8 CPU-bound loops at priority 30
+
+qnx# fs-9p -d -v -a hostshare -m /mnt/host
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+
+qnx# on -p 40 sh load_read.sh 30   # 8 loops at 30, then a 2 MiB read at 40
+6276d7218cd5662ab36a8b96b9d62e08  (host: 6276d7218cd5662ab36a8b96b9d62e08)
+loops that had ended when the read finished: 0 of 8
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/host (27 9P requests, 0 Rlerror, 27 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 0 waits for a free slot, 0 by a client above every slot owner, highest waiting 0, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 24 times, highest 40; set below the base 1 times, lowest 10; 0 priority changes failed
+
+### 2.a, run 3 of 5. fs-9p -f: a reader at priority 40 next to 8 CPU-bound loops at priority 30
+
+qnx# fs-9p -d -v -f -a hostshare -m /mnt/host
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, fixed), 16 request slots)
+
+qnx# on -p 40 sh load_read.sh 30   # 8 loops at 30, then a 2 MiB read at 40
+6276d7218cd5662ab36a8b96b9d62e08  (host: 6276d7218cd5662ab36a8b96b9d62e08)
+loops that had ended when the read finished: 0 of 8
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/host (27 9P requests, 0 Rlerror, 3 interrupts, 0 found after unmask, 24 reaped by waiters, 0 lost, at most 1 requests in flight; 0 waits for a free slot, 0 by a client above every slot owner, highest waiting 0, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 0 times, highest 21; set below the base 0 times, lowest 21; 0 priority changes failed
+
+### 2.b, run 3 of 5. fs-9p (default): a reader at priority 40 next to 8 CPU-bound loops at priority 30
+
+qnx# fs-9p -d -v -a hostshare -m /mnt/host
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+
+qnx# on -p 40 sh load_read.sh 30   # 8 loops at 30, then a 2 MiB read at 40
+6276d7218cd5662ab36a8b96b9d62e08  (host: 6276d7218cd5662ab36a8b96b9d62e08)
+loops that had ended when the read finished: 0 of 8
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/host (27 9P requests, 0 Rlerror, 27 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 0 waits for a free slot, 0 by a client above every slot owner, highest waiting 0, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 24 times, highest 40; set below the base 1 times, lowest 10; 0 priority changes failed
+
+### 2.a, run 4 of 5. fs-9p -f: a reader at priority 40 next to 8 CPU-bound loops at priority 30
+
+qnx# fs-9p -d -v -f -a hostshare -m /mnt/host
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, fixed), 16 request slots)
+
+qnx# on -p 40 sh load_read.sh 30   # 8 loops at 30, then a 2 MiB read at 40
+6276d7218cd5662ab36a8b96b9d62e08  (host: 6276d7218cd5662ab36a8b96b9d62e08)
+loops that had ended when the read finished: 0 of 8
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/host (27 9P requests, 0 Rlerror, 3 interrupts, 0 found after unmask, 24 reaped by waiters, 0 lost, at most 1 requests in flight; 0 waits for a free slot, 0 by a client above every slot owner, highest waiting 0, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 0 times, highest 21; set below the base 0 times, lowest 21; 0 priority changes failed
+
+### 2.b, run 4 of 5. fs-9p (default): a reader at priority 40 next to 8 CPU-bound loops at priority 30
+
+qnx# fs-9p -d -v -a hostshare -m /mnt/host
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+
+qnx# on -p 40 sh load_read.sh 30   # 8 loops at 30, then a 2 MiB read at 40
+6276d7218cd5662ab36a8b96b9d62e08  (host: 6276d7218cd5662ab36a8b96b9d62e08)
+loops that had ended when the read finished: 0 of 8
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/host (27 9P requests, 0 Rlerror, 27 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 0 waits for a free slot, 0 by a client above every slot owner, highest waiting 0, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 24 times, highest 40; set below the base 1 times, lowest 10; 0 priority changes failed
+
+### 2.a, run 5 of 5. fs-9p -f: a reader at priority 40 next to 8 CPU-bound loops at priority 30
+
+qnx# fs-9p -d -v -f -a hostshare -m /mnt/host
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, fixed), 16 request slots)
+
+qnx# on -p 40 sh load_read.sh 30   # 8 loops at 30, then a 2 MiB read at 40
+6276d7218cd5662ab36a8b96b9d62e08  (host: 6276d7218cd5662ab36a8b96b9d62e08)
+loops that had ended when the read finished: 0 of 8
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/host (27 9P requests, 0 Rlerror, 3 interrupts, 0 found after unmask, 24 reaped by waiters, 0 lost, at most 1 requests in flight; 0 waits for a free slot, 0 by a client above every slot owner, highest waiting 0, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 0 times, highest 21; set below the base 0 times, lowest 21; 0 priority changes failed
+
+### 2.b, run 5 of 5. fs-9p (default): a reader at priority 40 next to 8 CPU-bound loops at priority 30
+
+qnx# fs-9p -d -v -a hostshare -m /mnt/host
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+
+qnx# on -p 40 sh load_read.sh 30   # 8 loops at 30, then a 2 MiB read at 40
+6276d7218cd5662ab36a8b96b9d62e08  (host: 6276d7218cd5662ab36a8b96b9d62e08)
+loops that had ended when the read finished: 0 of 8
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/host (27 9P requests, 0 Rlerror, 27 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 0 waits for a free slot, 0 by a client above every slot owner, highest waiting 0, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 24 times, highest 40; set below the base 1 times, lowest 10; 0 priority changes failed
+
+### 3a. fs-9p -n 1 (default): pidin while a reader at priority 40 waits for the request slot that a reader at priority 10 holds (no load)
+
+qnx# fs-9p -d -v -n 1 -a slow -m /mnt/slow
+VQ: 1 slots, 135168 bytes per buffer, interrupt-driven, a thread that waits for a slot raises the slot's owner (priority-inheritance mutex per slot)
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 1 request slots)
+
+qnx# on -p 50 sh slot.sh A   # a reader at 10 reads 3 MiB; three 4 KiB reads at 40; pidin until a thread waits on the slot's mutex
+     pid tid name                         prio STATE          Blocked                     
+ 5128221   2 tmp/fs9p/fs-9p                40f INTR                                       
+ 5128221   4 tmp/fs9p/fs-9p                40r MUTEX          (0x47e6fb2438) 5128221-05 #0
+ 5128221   5 tmp/fs9p/fs-9p                40r CONDVAR        (0x47e6fb2430)              
+ 5181468   1 proc/boot/dd                  10r REPLY          5128221                     
+ 5197854   1 proc/boot/dd                  40r REPLY          5128221                     
+--
+     pid tid name                         prio STATE          Blocked                     
+ 5128221   2 tmp/fs9p/fs-9p                40f INTR                                       
+ 5128221   3 tmp/fs9p/fs-9p                40r MUTEX          (0x47e6fb2438) 5128221-05 #0
+ 5128221   5 tmp/fs9p/fs-9p                40r CONDVAR        (0x47e6fb2430)              
+ 5181468   1 proc/boot/dd                  10r REPLY          5128221                     
+ 5267486   1 proc/boot/dd                  40r REPLY          5128221                     
+--
+     pid tid name                         prio STATE          Blocked                     
+ 5128221   2 tmp/fs9p/fs-9p                40f INTR                                       
+ 5128221   4 tmp/fs9p/fs-9p                40r MUTEX          (0x47e6fb2438) 5128221-05 #0
+ 5128221   5 tmp/fs9p/fs-9p                40r CONDVAR        (0x47e6fb2430)              
+ 5181468   1 proc/boot/dd                  10r REPLY          5128221                     
+ 5337118   1 proc/boot/dd                  40r REPLY          5128221                     
+--
+reads at 40 during which pidin showed a thread of fs-9p blocked on a slot mutex: 3 of 3
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/slow (63 9P requests, 0 Rlerror, 63 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 41 waits for a free slot, 11 by a client above every slot owner, highest waiting 40, 41 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 48 times, highest 40; set below the base 21 times, lowest 10; 0 priority changes failed
+
+### 3b. run 1 of 5, fs-9p -n 1 -f: a reader at 10 holds the request slot, 8 loops at 30 start, then a reader at 40 reads 256 KiB
+
+qnx# fs-9p -d -v -f -n 1 -a slow -m /mnt/slow
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, fixed), 1 request slots)
+
+qnx# on -p 50 sh slot.sh B
+pidin 1 s after the reader at 40 started:
+     pid tid name                         prio STATE          Blocked                     
+ 5505053   2 tmp/fs9p/fs-9p                21f READY                                      
+ 5505053   4 tmp/fs9p/fs-9p                40r CONDVAR        (0x33b5760e08)              
+ 5505053   5 tmp/fs9p/fs-9p                10r READY                                      
+loops that had ended when the read at 40 finished: 8 of 8
+9a5e07587ffb467062e958826da80bfe  (host: 9a5e07587ffb467062e958826da80bfe)
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/slow (47 9P requests, 0 Rlerror, 46 interrupts, 1 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 10 waits for a free slot, 5 by a client above every slot owner, highest waiting 40, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 0 times, highest 21; set below the base 0 times, lowest 21; 0 priority changes failed
+
+### 3b. run 1 of 5, fs-9p -n 1 -w (no priority inheritance through the slots, as in 0.9.0): a reader at 10 holds the request slot, 8 loops at 30 start, then a reader at 40 reads 256 KiB
+
+qnx# fs-9p -d -v -w -n 1 -a slow -m /mnt/slow
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 1 request slots)
+
+qnx# on -p 50 sh slot.sh B
+pidin 1 s after the reader at 40 started:
+     pid tid name                         prio STATE          Blocked                     
+ 5918749   2 tmp/fs9p/fs-9p                10f READY                                      
+ 5918749   4 tmp/fs9p/fs-9p                40r CONDVAR        (0x550b32ee08)              
+ 5918749   5 tmp/fs9p/fs-9p                10r READY                                      
+loops that had ended when the read at 40 finished: 8 of 8
+9a5e07587ffb467062e958826da80bfe  (host: 9a5e07587ffb467062e958826da80bfe)
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/slow (47 9P requests, 0 Rlerror, 45 interrupts, 1 found after unmask, 1 reaped by waiters, 0 lost, at most 1 requests in flight; 6 waits for a free slot, 3 by a client above every slot owner, highest waiting 40, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 11 times, highest 40; set below the base 4 times, lowest 10; 0 priority changes failed
+
+### 3b. run 1 of 5, fs-9p -n 1 (default): a reader at 10 holds the request slot, 8 loops at 30 start, then a reader at 40 reads 256 KiB
+
+qnx# fs-9p -d -v -n 1 -a slow -m /mnt/slow
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 1 request slots)
+
+qnx# on -p 50 sh slot.sh B
+pidin 1 s after the reader at 40 started:
+     pid tid name                         prio STATE          Blocked                     
+ 6332445   2 tmp/fs9p/fs-9p                21f INTR                                       
+ 6332445   5 tmp/fs9p/fs-9p                10r READY                                      
+loops that had ended when the read at 40 finished: 0 of 8
+9a5e07587ffb467062e958826da80bfe  (host: 9a5e07587ffb467062e958826da80bfe)
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/slow (47 9P requests, 0 Rlerror, 46 interrupts, 0 found after unmask, 1 reaped by waiters, 0 lost, at most 1 requests in flight; 1 waits for a free slot, 1 by a client above every slot owner, highest waiting 40, 1 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 12 times, highest 40; set below the base 2 times, lowest 10; 0 priority changes failed
+
+### 3b. run 2 of 5, fs-9p -n 1 -f: a reader at 10 holds the request slot, 8 loops at 30 start, then a reader at 40 reads 256 KiB
+
+qnx# fs-9p -d -v -f -n 1 -a slow -m /mnt/slow
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, fixed), 1 request slots)
+
+qnx# on -p 50 sh slot.sh B
+pidin 1 s after the reader at 40 started:
+     pid tid name                         prio STATE          Blocked                     
+ 6746141   2 tmp/fs9p/fs-9p                21f READY                                      
+ 6746141   4 tmp/fs9p/fs-9p                40r CONDVAR        (0x2da593fe08)              
+ 6746141   5 tmp/fs9p/fs-9p                10r READY                                      
+loops that had ended when the read at 40 finished: 8 of 8
+9a5e07587ffb467062e958826da80bfe  (host: 9a5e07587ffb467062e958826da80bfe)
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/slow (47 9P requests, 0 Rlerror, 44 interrupts, 3 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 6 waits for a free slot, 3 by a client above every slot owner, highest waiting 40, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 0 times, highest 21; set below the base 0 times, lowest 21; 0 priority changes failed
+
+### 3b. run 2 of 5, fs-9p -n 1 -w (no priority inheritance through the slots, as in 0.9.0): a reader at 10 holds the request slot, 8 loops at 30 start, then a reader at 40 reads 256 KiB
+
+qnx# fs-9p -d -v -w -n 1 -a slow -m /mnt/slow
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 1 request slots)
+
+qnx# on -p 50 sh slot.sh B
+pidin 1 s after the reader at 40 started:
+     pid tid name                         prio STATE          Blocked                     
+ 7159837   2 tmp/fs9p/fs-9p                10f READY                                      
+ 7159837   4 tmp/fs9p/fs-9p                40r CONDVAR        (0x2e25eade08)              
+ 7159837   5 tmp/fs9p/fs-9p                10r READY                                      
+loops that had ended when the read at 40 finished: 8 of 8
+9a5e07587ffb467062e958826da80bfe  (host: 9a5e07587ffb467062e958826da80bfe)
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/slow (47 9P requests, 0 Rlerror, 46 interrupts, 0 found after unmask, 2 reaped by waiters, 0 lost, at most 1 requests in flight; 16 waits for a free slot, 8 by a client above every slot owner, highest waiting 40, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 11 times, highest 40; set below the base 9 times, lowest 10; 0 priority changes failed
+
+### 3b. run 2 of 5, fs-9p -n 1 (default): a reader at 10 holds the request slot, 8 loops at 30 start, then a reader at 40 reads 256 KiB
+
+qnx# fs-9p -d -v -n 1 -a slow -m /mnt/slow
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 1 request slots)
+
+qnx# on -p 50 sh slot.sh B
+pidin 1 s after the reader at 40 started:
+     pid tid name                         prio STATE          Blocked                     
+ 7573533   2 tmp/fs9p/fs-9p                21f INTR                                       
+ 7573533   4 tmp/fs9p/fs-9p                10r READY                                      
+loops that had ended when the read at 40 finished: 0 of 8
+9a5e07587ffb467062e958826da80bfe  (host: 9a5e07587ffb467062e958826da80bfe)
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/slow (47 9P requests, 0 Rlerror, 46 interrupts, 0 found after unmask, 1 reaped by waiters, 0 lost, at most 1 requests in flight; 1 waits for a free slot, 1 by a client above every slot owner, highest waiting 40, 1 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 12 times, highest 40; set below the base 2 times, lowest 10; 0 priority changes failed
+
+### 3b. run 3 of 5, fs-9p -n 1 -f: a reader at 10 holds the request slot, 8 loops at 30 start, then a reader at 40 reads 256 KiB
+
+qnx# fs-9p -d -v -f -n 1 -a slow -m /mnt/slow
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, fixed), 1 request slots)
+
+qnx# on -p 50 sh slot.sh B
+pidin 1 s after the reader at 40 started:
+     pid tid name                         prio STATE          Blocked                     
+ 7987229   2 tmp/fs9p/fs-9p                21f READY                                      
+ 7987229   4 tmp/fs9p/fs-9p                40r CONDVAR        (0x3733c8ce08)              
+ 7987229   5 tmp/fs9p/fs-9p                10r READY                                      
+loops that had ended when the read at 40 finished: 8 of 8
+9a5e07587ffb467062e958826da80bfe  (host: 9a5e07587ffb467062e958826da80bfe)
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/slow (47 9P requests, 0 Rlerror, 45 interrupts, 2 found after unmask, 1 reaped by waiters, 0 lost, at most 1 requests in flight; 6 waits for a free slot, 3 by a client above every slot owner, highest waiting 40, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 0 times, highest 21; set below the base 0 times, lowest 21; 0 priority changes failed
+
+### 3b. run 3 of 5, fs-9p -n 1 -w (no priority inheritance through the slots, as in 0.9.0): a reader at 10 holds the request slot, 8 loops at 30 start, then a reader at 40 reads 256 KiB
+
+qnx# fs-9p -d -v -w -n 1 -a slow -m /mnt/slow
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 1 request slots)
+
+qnx# on -p 50 sh slot.sh B
+pidin 1 s after the reader at 40 started:
+     pid tid name                         prio STATE          Blocked                     
+ 8400925   2 tmp/fs9p/fs-9p                10f READY                                      
+ 8400925   4 tmp/fs9p/fs-9p                40r CONDVAR        (0x20b4d7ae08)              
+ 8400925   5 tmp/fs9p/fs-9p                10r READY                                      
+loops that had ended when the read at 40 finished: 8 of 8
+9a5e07587ffb467062e958826da80bfe  (host: 9a5e07587ffb467062e958826da80bfe)
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/slow (47 9P requests, 0 Rlerror, 46 interrupts, 0 found after unmask, 1 reaped by waiters, 0 lost, at most 1 requests in flight; 10 waits for a free slot, 5 by a client above every slot owner, highest waiting 40, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 11 times, highest 40; set below the base 6 times, lowest 10; 0 priority changes failed
+
+### 3b. run 3 of 5, fs-9p -n 1 (default): a reader at 10 holds the request slot, 8 loops at 30 start, then a reader at 40 reads 256 KiB
+
+qnx# fs-9p -d -v -n 1 -a slow -m /mnt/slow
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 1 request slots)
+
+qnx# on -p 50 sh slot.sh B
+pidin 1 s after the reader at 40 started:
+     pid tid name                         prio STATE          Blocked                     
+ 8814621   2 tmp/fs9p/fs-9p                21f INTR                                       
+ 8814621   5 tmp/fs9p/fs-9p                10r READY                                      
+loops that had ended when the read at 40 finished: 0 of 8
+9a5e07587ffb467062e958826da80bfe  (host: 9a5e07587ffb467062e958826da80bfe)
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/slow (47 9P requests, 0 Rlerror, 46 interrupts, 0 found after unmask, 1 reaped by waiters, 0 lost, at most 1 requests in flight; 1 waits for a free slot, 1 by a client above every slot owner, highest waiting 40, 1 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 12 times, highest 40; set below the base 2 times, lowest 10; 0 priority changes failed
+
+### 3b. run 4 of 5, fs-9p -n 1 -f: a reader at 10 holds the request slot, 8 loops at 30 start, then a reader at 40 reads 256 KiB
+
+qnx# fs-9p -d -v -f -n 1 -a slow -m /mnt/slow
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, fixed), 1 request slots)
+
+qnx# on -p 50 sh slot.sh B
+pidin 1 s after the reader at 40 started:
+     pid tid name                         prio STATE          Blocked                     
+ 9228317   2 tmp/fs9p/fs-9p                21f READY                                      
+ 9228317   4 tmp/fs9p/fs-9p                40r CONDVAR        (0x3300aa3e08)              
+ 9228317   5 tmp/fs9p/fs-9p                10r READY                                      
+loops that had ended when the read at 40 finished: 8 of 8
+9a5e07587ffb467062e958826da80bfe  (host: 9a5e07587ffb467062e958826da80bfe)
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/slow (47 9P requests, 0 Rlerror, 45 interrupts, 2 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 6 waits for a free slot, 3 by a client above every slot owner, highest waiting 40, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 0 times, highest 21; set below the base 0 times, lowest 21; 0 priority changes failed
+
+### 3b. run 4 of 5, fs-9p -n 1 -w (no priority inheritance through the slots, as in 0.9.0): a reader at 10 holds the request slot, 8 loops at 30 start, then a reader at 40 reads 256 KiB
+
+qnx# fs-9p -d -v -w -n 1 -a slow -m /mnt/slow
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 1 request slots)
+
+qnx# on -p 50 sh slot.sh B
+pidin 1 s after the reader at 40 started:
+     pid tid name                         prio STATE          Blocked                     
+ 9642013   2 tmp/fs9p/fs-9p                10f READY                                      
+ 9642013   4 tmp/fs9p/fs-9p                40r CONDVAR        (0x3a3cffae08)              
+ 9642013   5 tmp/fs9p/fs-9p                10r READY                                      
+loops that had ended when the read at 40 finished: 8 of 8
+9a5e07587ffb467062e958826da80bfe  (host: 9a5e07587ffb467062e958826da80bfe)
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/slow (47 9P requests, 0 Rlerror, 46 interrupts, 0 found after unmask, 1 reaped by waiters, 0 lost, at most 1 requests in flight; 6 waits for a free slot, 3 by a client above every slot owner, highest waiting 40, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 11 times, highest 40; set below the base 4 times, lowest 10; 0 priority changes failed
+
+### 3b. run 4 of 5, fs-9p -n 1 (default): a reader at 10 holds the request slot, 8 loops at 30 start, then a reader at 40 reads 256 KiB
+
+qnx# fs-9p -d -v -n 1 -a slow -m /mnt/slow
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 1 request slots)
+
+qnx# on -p 50 sh slot.sh B
+pidin 1 s after the reader at 40 started:
+     pid tid name                         prio STATE          Blocked                     
+10055709   2 tmp/fs9p/fs-9p                21f INTR                                       
+10055709   3 tmp/fs9p/fs-9p                10r READY                                      
+loops that had ended when the read at 40 finished: 0 of 8
+9a5e07587ffb467062e958826da80bfe  (host: 9a5e07587ffb467062e958826da80bfe)
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/slow (47 9P requests, 0 Rlerror, 46 interrupts, 0 found after unmask, 1 reaped by waiters, 0 lost, at most 1 requests in flight; 1 waits for a free slot, 1 by a client above every slot owner, highest waiting 40, 1 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 12 times, highest 40; set below the base 2 times, lowest 10; 0 priority changes failed
+
+### 3b. run 5 of 5, fs-9p -n 1 -f: a reader at 10 holds the request slot, 8 loops at 30 start, then a reader at 40 reads 256 KiB
+
+qnx# fs-9p -d -v -f -n 1 -a slow -m /mnt/slow
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, fixed), 1 request slots)
+
+qnx# on -p 50 sh slot.sh B
+pidin 1 s after the reader at 40 started:
+     pid tid name                         prio STATE          Blocked                     
+10551325   2 tmp/fs9p/fs-9p                21f READY                                      
+10551325   4 tmp/fs9p/fs-9p                40r CONDVAR        (0x2b709a7e08)              
+10551325   5 tmp/fs9p/fs-9p                10r READY                                      
+loops that had ended when the read at 40 finished: 8 of 8
+9a5e07587ffb467062e958826da80bfe  (host: 9a5e07587ffb467062e958826da80bfe)
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/slow (47 9P requests, 0 Rlerror, 47 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 6 waits for a free slot, 3 by a client above every slot owner, highest waiting 40, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 0 times, highest 21; set below the base 0 times, lowest 21; 0 priority changes failed
+
+### 3b. run 5 of 5, fs-9p -n 1 -w (no priority inheritance through the slots, as in 0.9.0): a reader at 10 holds the request slot, 8 loops at 30 start, then a reader at 40 reads 256 KiB
+
+qnx# fs-9p -d -v -w -n 1 -a slow -m /mnt/slow
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 1 request slots)
+
+qnx# on -p 50 sh slot.sh B
+pidin 1 s after the reader at 40 started:
+     pid tid name                         prio STATE          Blocked                     
+10965021   2 tmp/fs9p/fs-9p                10f READY                                      
+10965021   4 tmp/fs9p/fs-9p                40r CONDVAR        (0x330ca60e08)              
+10965021   5 tmp/fs9p/fs-9p                10r READY                                      
+loops that had ended when the read at 40 finished: 8 of 8
+9a5e07587ffb467062e958826da80bfe  (host: 9a5e07587ffb467062e958826da80bfe)
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/slow (47 9P requests, 0 Rlerror, 46 interrupts, 0 found after unmask, 1 reaped by waiters, 0 lost, at most 1 requests in flight; 6 waits for a free slot, 3 by a client above every slot owner, highest waiting 40, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 11 times, highest 40; set below the base 4 times, lowest 10; 0 priority changes failed
+
+### 3b. run 5 of 5, fs-9p -n 1 (default): a reader at 10 holds the request slot, 8 loops at 30 start, then a reader at 40 reads 256 KiB
+
+qnx# fs-9p -d -v -n 1 -a slow -m /mnt/slow
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 1 request slots)
+
+qnx# on -p 50 sh slot.sh B
+pidin 1 s after the reader at 40 started:
+     pid tid name                         prio STATE          Blocked                     
+11378717   2 tmp/fs9p/fs-9p                21f INTR                                       
+11378717   5 tmp/fs9p/fs-9p                10r READY                                      
+loops that had ended when the read at 40 finished: 0 of 8
+9a5e07587ffb467062e958826da80bfe  (host: 9a5e07587ffb467062e958826da80bfe)
+
+qnx# slay fs-9p   # unmount; fs-9p prints its statistics
+fs-9p: signal 15, unmounting /mnt/slow (47 9P requests, 0 Rlerror, 47 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 1 waits for a free slot, 1 by a client above every slot owner, highest waiting 40, 1 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 12 times, highest 40; set below the base 2 times, lowest 10; 0 priority changes failed
+
+### Summary (counts and priorities from the output above)
+reader at priority 40, interrupt thread while the read waited (pidin): 21 with -f, 40 by default
+with 8 loops at priority 30, run 5: 24 of 27 9P requests were completed by the waiting server thread's fallback wait instead of the interrupt thread with -f (highest interrupt-thread priority 21); 0 of 27 by default (highest 40)
+fallback completions per run (completed by the fallback wait / 9P requests), 5 runs: with -f: 24/27 24/27 24/27 24/27 24/27 (range 24 to 24); by default: 0/27 0/27 0/27 0/27 0/27 (range 0 to 0)
+part 3a (fs-9p -n 1, default, no load): reads at 40 during which a server thread waited on the slot's mutex: 3 of 3; priority of the waiting thread / of the slot's owner (the reader-at-10's server thread) in the first such pidin: 40r/40r
+part 3b (fs-9p -n 1, reader at 10 holds the slot, 8 loops at 30, a 256 KiB read at 40), 5 run(s) per mode; loops that had ended when the read at 40 finished (of 8), per run: with -f: 8 8 8 8 8 (range 8 to 8); with -w: 8 8 8 8 8 (range 8 to 8); by default: 0 0 0 0 0 (range 0 to 0)
+part 3b, waits for a free slot by a client above every slot owner, per run: -f: 5 3 3 3 3 ; -w: 3 8 5 3 3 ; default: 1 1 1 1 1 | slots handed over: -f: 0 0 0 0 0 ; -w: 0 0 0 0 0 ; default: 1 1 1 1 1 | fallback completions: -f: 0 0 1 0 0 ; -w: 1 2 1 1 1 ; default: 1 1 1 1 0 | md5 of the read at 40 against the host: -f: equal equal equal equal equal ; -w: equal equal equal equal equal ; default: equal equal equal equal equal 
+fallback wait: a server thread that waits for the device looks at the ring itself every 200 ms, in case the interrupt thread did not run (a constant in src/virtq.c, not a measurement); the counts say how often that check, not the interrupt thread, completed a request
+
+### Mount the shared folder again (default options)
+
+qnx# fs-9p -d -a hostshare -m /mnt/host
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)

@@ -1,0 +1,97 @@
+# fs-9p git bisect demo, 2026-11-12T06:22:51+09:00, sources sha256 52ee0000bee9 (tests/srchash.sh)
+
+$ git log --oneline
+22b68ac errclass.h: comment
+44a4c6e README: the three classes
+e988835 errclass: ETIMEDOUT is retry
+58a1bd9 errclass: simplify, ENOTSUP is EOPNOTSUPP
+f09e4b7 add README
+b748c1b errclass: EWOULDBLOCK is retry too
+e8fb139 test: EIO is fatal
+62ba45f errclass: sort errno values into retry, unsupported and fatal
+
+### Is ENOTSUP the same value as EOPNOTSUPP? (a program prints the comparison)
+
+$ cc -o same_linux same.c && echo "Linux: $(./same_linux)"
+Linux: same value
+
+$ qcc -Vgcc_ntox86_64 -o same_qnx same.c && echo "QNX guest: $(qnx-run ./same_qnx)"
+QNX guest: two different values
+
+### The unit test at the newest commit: built for Linux, and built with qcc and run in the QNX guest
+
+$ cc -o test_linux test_errclass.c errclass.c && ./test_linux; echo "Linux exit status $?"
+ok EAGAIN is retry
+ok EINTR is retry
+ok ETIMEDOUT is retry
+ok ENOSYS is unsupported
+ok ENOTSUP is unsupported
+ok EOPNOTSUPP is unsupported
+ok EIO is fatal
+0 failed
+Linux exit status 0
+
+$ qcc -Vgcc_ntox86_64 -o test_errclass test_errclass.c errclass.c && qnx-run ./test_errclass; echo "QNX exit status $?"
+ok EAGAIN is retry
+ok EINTR is retry
+ok ETIMEDOUT is retry
+ok ENOSYS is unsupported
+not ok ENOTSUP is unsupported
+ok EOPNOTSUPP is unsupported
+ok EIO is fatal
+1 failed
+QNX exit status 1
+
+### git bisect: newest commit bad, first commit good; each step builds with qcc and runs the test in the guest
+
+$ git bisect start HEAD 62ba45f96f43808e4b2f6ad2ba4c4de3b6d01bb8
+Bisecting: 3 revisions left to test after this (roughly 2 steps)
+[f09e4b73cd4af979048f1e8b46c16ea7332a5ee7] add README
+
+$ git bisect run sh -c 'qcc -Vgcc_ntox86_64 -o test_errclass test_errclass.c errclass.c || exit 125; qnx-run ./test_errclass'
+running  'sh' '-c' 'qcc -Vgcc_ntox86_64 -o test_errclass test_errclass.c errclass.c || exit 125; qnx-run ./test_errclass'
+ok EAGAIN is retry
+ok EINTR is retry
+ok ENOSYS is unsupported
+ok ENOTSUP is unsupported
+ok EOPNOTSUPP is unsupported
+ok EIO is fatal
+0 failed
+Bisecting: 1 revision left to test after this (roughly 1 step)
+[e9888355ce622d8520197ba5b6dac48f12593c0d] errclass: ETIMEDOUT is retry
+running  'sh' '-c' 'qcc -Vgcc_ntox86_64 -o test_errclass test_errclass.c errclass.c || exit 125; qnx-run ./test_errclass'
+ok EAGAIN is retry
+ok EINTR is retry
+ok ETIMEDOUT is retry
+ok ENOSYS is unsupported
+not ok ENOTSUP is unsupported
+ok EOPNOTSUPP is unsupported
+ok EIO is fatal
+1 failed
+Bisecting: 0 revisions left to test after this (roughly 0 steps)
+[58a1bd98cedee1e3c1265af9dfa8cdb6aada4f13] errclass: simplify, ENOTSUP is EOPNOTSUPP
+running  'sh' '-c' 'qcc -Vgcc_ntox86_64 -o test_errclass test_errclass.c errclass.c || exit 125; qnx-run ./test_errclass'
+ok EAGAIN is retry
+ok EINTR is retry
+ok ENOSYS is unsupported
+not ok ENOTSUP is unsupported
+ok EOPNOTSUPP is unsupported
+ok EIO is fatal
+1 failed
+58a1bd98cedee1e3c1265af9dfa8cdb6aada4f13 is the first bad commit
+commit 58a1bd98cedee1e3c1265af9dfa8cdb6aada4f13
+Author: demo <demo@example.invalid>
+Date:   Mon Jan 5 12:00:00 2026 +0000
+
+    errclass: simplify, ENOTSUP is EOPNOTSUPP
+
+ errclass.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+bisect found first bad commit
+$ git bisect reset
+Previous HEAD position was 58a1bd9 errclass: simplify, ENOTSUP is EOPNOTSUPP
+Switched to branch 'main'
+
+bisect: 8 commits in the history; 3 commits built and run in the guest by git bisect run
+bisect: first bad commit: 58a1bd9 "errclass: simplify, ENOTSUP is EOPNOTSUPP"
+RESULT: git bisect run with tools/qnx-run found the planted commit

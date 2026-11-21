@@ -1,0 +1,324 @@
+#!/usr/bin/env bash
+# tools/qnx-run - run a program from the shared folder inside the QNX guest and return its exit
+# status, stdout and stderr on the host. Nothing is copied: the guest starts the program from the
+# fs-9p mount (/mnt/host by default), so a host build and a guest run see the same files.
+#
+# usage: tools/qnx-run [-t seconds] [--json] [-o dir] [-j junit.xml] [-n test_name] [-C host_dir]
+#                      [-e NAME=VALUE]... [-i] [-u user] [--] program [args...]
+#   program  a host path inside QNX_SHARE (absolute or relative; mapped to the guest path), or a
+#            name without "/", which the guest looks up in its PATH (for example: qnx-run uname -a)
+#   args     passed unchanged, except that an argument that is an absolute host path inside
+#            QNX_SHARE is mapped to the guest path
+#   -C dir   working directory (default: the current host directory); inside QNX_SHARE it becomes
+#            the same folder in the guest, outside it the guest uses QNX_MOUNT
+#   -e N=V   set an environment variable for the program in the guest (repeatable); absolute host
+#            paths inside QNX_SHARE in V, also in a colon-separated list such as LD_LIBRARY_PATH,
+#            are mapped to guest paths
+#   -j file  also write a JUnit XML report with one test case (name from -n, default: the program
+#            name); stdout and stderr are then shown when the program ends
+#   -n name  test-case name for -j
+#   -i       pass the host's stdin to the program (default: the program reads /dev/null)
+#   -u user  run the program as this guest user (the guest's on -u; the ssh login stays root), for
+#            test suites that refuse to run as root
+#   -t secs  time limit: after secs seconds the guest stops the program (SIGTERM to its process
+#            group, SIGKILL 2 s later) and qnx-run returns 124, as timeout(1) does
+#   --json   print one line with a JSON object when the program ends, and nothing else on stdout:
+#            exit_status, signal and signal_name (as the guest names it), timed_out (true only
+#            when the guest reports that the -t limit stopped the program; a program that exits
+#            with 124 by itself gives false), host_signal,
+#            stdout and stderr (text, at most the last 64 KiB each) and the files that hold them
+#            in full, core_file (see QNX_CORE_DIR), junit_file, error
+#   -o dir   with --json: folder for stdout.txt and stderr.txt (default: a new folder in $TMPDIR
+#            or /tmp, kept)
+# Stopping: the guest stops the program (SIGTERM to its process group, SIGKILL 2 s later) when the
+# time limit of -t is reached, when qnx-run gets SIGINT, SIGTERM or SIGHUP (Ctrl-C, ctest
+# TIMEOUT_SIGNAL_NAME), and when the ssh connection ends because qnx-run and ssh were killed (the
+# SIGKILL of a ctest TIMEOUT): the guest checks its ssh session once a second.
+# Exit status: the program's exit status (128+N if a signal N ended it, N as numbered by QNX); 124
+# if the -t limit stopped it; 128+N if qnx-run got signal N (130 for SIGINT, 143 for SIGTERM, 129
+# for SIGHUP); 125 if qnx-run itself fails (bad usage, program outside QNX_SHARE); 255 if ssh
+# cannot reach the guest.
+#
+# Settings (environment):
+#   QNX_SHARE  host folder that QEMU exports to the guest (the SHARE_FOLDER argument of
+#              tools/qnx-vm or tools/qnx-share.sh)
+#   QNX_IMAGE  image folder of a VM started with tools/qnx-vm: QNX_SHARE and QNX_SSH_PORT default
+#              to the values that tools/qnx-vm start saved there
+#   QNX_MOUNT  where fs-9p mounts it in the guest (default /mnt/host)
+#   QNX_SSH    command that runs its argument as a shell command in the guest
+#              (default: ssh -p $QNX_SSH_PORT root@127.0.0.1 with batch-mode options; QNX_SSH_PORT
+#              default 2222, the port of tools/qnx-share.sh; QNX_SSH_KEY: private key file for -i,
+#              the key whose public half tools/make-image.sh put into the image with SSH_IDENT)
+#   QNX_CORE_DIR with --json: host folder (inside QNX_SHARE) that the guest's dumper writes core
+#              files into; after a crash qnx-run waits for the new core file and names it
+#
+# Use as the test emulator of CMake (ctest runs every test in the guest):
+#   cmake -DCMAKE_TOOLCHAIN_FILE=... -DCMAKE_CROSSCOMPILING_EMULATOR=/path/to/tools/qnx-run ...
+# and from make:  $(QNX_RUN) $(B)/test_x   (see examples/qnx-unit/).
+# Copyright 2026 The fs-9p authors. Licensed under the Apache License, Version 2.0.
+set -u
+me=qnx-run
+json=0
+die() {
+    echo "$me: $*" >&2
+    [ "$json" = 1 ] && printf '{"exit_status":125,"error":"%s"}\n' "$(printf '%s' "$me: $*" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
+    exit 125
+}
+
+junit= name= cdir= stdin=0 tlimit=0 odir= ruser=
+envs=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -j) [ $# -ge 2 ] || die "-j needs a file"; junit=$2; shift 2 ;;
+        -n) [ $# -ge 2 ] || die "-n needs a name"; name=$2; shift 2 ;;
+        -C) [ $# -ge 2 ] || die "-C needs a folder"; cdir=$2; shift 2 ;;
+        -e) [ $# -ge 2 ] || die "-e needs NAME=VALUE"; case "$2" in [A-Za-z_]*=*) envs+=("$2") ;; *) die "-e $2: not NAME=VALUE" ;; esac; shift 2 ;;
+        -i) stdin=1; shift ;;
+        -u) [ $# -ge 2 ] || die "-u needs a user name"; case "$2" in ''|*[!A-Za-z0-9_.-]*) die "-u $2: not a user name" ;; esac; ruser=$2; shift 2 ;;
+        -t) [ $# -ge 2 ] || die "-t needs a number of seconds"; case "$2" in ''|*[!0-9]*) die "-t $2: not a whole number of seconds" ;; esac; tlimit=$((10#$2)); shift 2 ;;
+        --json) json=1; shift ;;
+        -o) [ $# -ge 2 ] || die "-o needs a folder"; odir=$2; shift 2 ;;
+        -h|--help) sed -n '2,55p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --) shift; break ;;
+        -*) die "unknown option $1 (see $me -h)" ;;
+        *) break ;;
+    esac
+done
+[ $# -ge 1 ] || die "no program given (see $me -h)"
+# A VM started with tools/qnx-vm: share and port from its state folder when QNX_IMAGE is set.
+if [ -n "${QNX_IMAGE:-}" ] && [ -d "$QNX_IMAGE/qnx-vm" ]; then
+    [ -n "${QNX_SHARE:-}" ] || QNX_SHARE=$(cat "$QNX_IMAGE/qnx-vm/share" 2>/dev/null)
+    [ -n "${QNX_SSH_PORT:-}" ] || QNX_SSH_PORT=$(cat "$QNX_IMAGE/qnx-vm/port" 2>/dev/null)
+fi
+[ -n "${QNX_SHARE:-}" ] || die "QNX_SHARE is not set (the host folder that the guest mounts), and QNX_IMAGE names no VM of tools/qnx-vm"
+SHARE=$(cd "$QNX_SHARE" 2>/dev/null && pwd -P) || die "QNX_SHARE=$QNX_SHARE is not a folder"
+MOUNT=${QNX_MOUNT:-/mnt/host}
+if [ -n "${QNX_SSH:-}" ]; then
+    read -r -a SSH <<< "$QNX_SSH"
+else
+    SSH=(ssh -p "${QNX_SSH_PORT:-2222}" -o BatchMode=yes -o StrictHostKeyChecking=no
+         -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR)
+    [ -n "${QNX_SSH_KEY:-}" ] && SSH+=(-i "$QNX_SSH_KEY" -o IdentitiesOnly=yes)
+    SSH+=(root@127.0.0.1)
+fi
+
+q() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }   # quote for the guest shell
+to_guest() {   # host path (exists) -> guest path, or fail
+    local p
+    p=$(cd "$(dirname "$1")" 2>/dev/null && pwd -P)/$(basename "$1") || return 1
+    case "$p" in "$SHARE") echo "$MOUNT" ;; "$SHARE"/*) echo "$MOUNT${p#"$SHARE"}" ;; *) return 1 ;; esac
+}
+
+prog=$1; shift
+case "$prog" in
+    */*) [ -e "$prog" ] || die "$prog: no such file on the host"
+         gprog=$(to_guest "$prog") || die "$prog is not inside QNX_SHARE ($SHARE)" ;;
+    *)   gprog=$prog ;;
+esac
+hcwd=$(cd "${cdir:-.}" 2>/dev/null && pwd -P) || die "-C ${cdir}: no such folder"
+case "$hcwd" in "$SHARE") gcwd=$MOUNT ;; "$SHARE"/*) gcwd="$MOUNT${hcwd#"$SHARE"}" ;; *) gcwd=$MOUNT ;; esac
+
+run=
+mapv() {   # map host paths inside QNX_SHARE in a colon-separated value
+    local IFS=: out= p parts=()
+    read -r -a parts <<< "$1"
+    for p in ${parts[@]+"${parts[@]}"}; do
+        case "$p" in "$SHARE"|"$SHARE"/*) p="$MOUNT${p#"$SHARE"}" ;; esac
+        out+="${out:+:}$p"
+    done
+    printf '%s' "$out"
+}
+for e in ${envs[@]+"${envs[@]}"}; do run+="${e%%=*}=$(q "$(mapv "${e#*=}")") "; done
+[ -n "$ruser" ] && run+="on -u $(q "$ruser") "
+run+="$(q "$gprog")"
+for a in "$@"; do
+    case "$a" in "$SHARE"|"$SHARE"/*) a="$MOUNT${a#"$SHARE"}" ;; esac
+    run+=" $(q "$a")"
+done
+
+# The command for the guest shell. The program runs as a background job in its own process group
+# (set -m), so that the guest can stop it and its child processes. Watchers in the guest stop the
+# program (qr_stop: SIGTERM to the group, SIGKILL 2 s later; not "stop", which ksh defines as an
+# alias of kill -STOP) and leave a flag file:
+#   A (without -i): reads the ssh channel's stdin. qnx-run writes "stop" there when it gets SIGINT,
+#     SIGTERM or SIGHUP. End of input without "stop" means the ssh client ended; A then checks once
+#     a second whether the guest's ssh session process (the shell's parent) still exists.
+#   B (with -t, and always with -i): once a second, the time limit and (with -i) the ssh session.
+# The shell waits for the program, waits for a watcher that is stopping it, and exits with the
+# program's status, or 124 when the time limit stopped it. "wait" instead of exec also keeps the
+# status 128+N of a program that a signal ended (ssh would report a signal of its remote process as
+# 255). With --json or -j (J=1) the shell also reports on stderr, in marker lines that qnx-run
+# removes, the signal that ended the program and whether the time limit stopped it, so that
+# timed_out is not guessed from the exit status 124 (which a program can return by itself).
+mk=0; { [ "$json" = 1 ] || [ -n "$junit" ]; } && mk=1
+cmd="cd $(q "$gcwd") || exit 125
+f=/tmp/qnx-run.\$\$ p=\$PPID T=$tlimit I=$stdin J=$mk"
+cmd+='
+qr_stop() { kill -TERM -$c 2>/dev/null || kill -TERM $c 2>/dev/null; i=0; while [ $i -lt 2 ] && kill -0 -$c 2>/dev/null; do sleep 1; i=$((i+1)); done; kill -KILL -$c 2>/dev/null; kill -KILL $c 2>/dev/null; }
+exec 3<&0
+set -m 2>/dev/null
+if [ $I = 1 ]; then '"$run"' <&3 3<&- & c=$!; else '"$run"' </dev/null 3<&- & c=$!; fi
+set +m 2>/dev/null
+a= b=
+if [ $I = 0 ]; then
+    ( read -r x <&3; if [ "$x" != stop ]; then while kill -0 $c 2>/dev/null && kill -0 $p 2>/dev/null; do sleep 1; done; fi
+      kill -0 $c 2>/dev/null || exit 0; : >$f.e; qr_stop ) >/dev/null 2>&1 &
+    a=$!
+fi
+exec 3<&-
+if [ $T -gt 0 ] || [ $I = 1 ]; then
+    ( s=0; while kill -0 $c 2>/dev/null; do
+          if [ $I = 1 ] && ! kill -0 $p 2>/dev/null; then : >$f.e; qr_stop; exit 0; fi
+          if [ $T -gt 0 ] && [ $s -ge $T ]; then : >$f.t; qr_stop; exit 0; fi
+          sleep 1; s=$((s+1))
+      done ) >/dev/null 2>&1 &
+    b=$!
+fi
+wait $c; rc=$?
+tl=0
+if [ -f $f.t ]; then rc=124 tl=1; wait $b; elif [ -f $f.e ]; then wait $a $b; fi
+kill $a $b 2>/dev/null; rm -f $f.t $f.e
+if [ $J = 1 ] && [ $tl = 1 ]; then echo "@@qnx-run@@ time limit" >&2
+elif [ $J = 1 ] && [ $rc -gt 128 ] && [ $rc -lt 192 ]; then echo "@@qnx-run@@ signal $((rc-128)) $(kill -l $((rc-128)) 2>/dev/null)" >&2; fi
+exit $rc'
+
+tmp=$(mktemp -d) || die "mktemp failed"
+trap 'rm -rf "$tmp"' EXIT
+: > "$tmp/start"
+if [ "$json" = 1 ]; then
+    if [ -n "$odir" ]; then mkdir -p "$odir" || die "-o $odir: cannot create the folder"; odir=$(cd "$odir" && pwd -P)
+    else odir=$(mktemp -d "${TMPDIR:-/tmp}/qnx-run.XXXXXX") || die "mktemp failed"; fi
+    out=$odir/stdout.txt err=$odir/stderr.txt
+elif [ -n "$junit" ]; then
+    out=$tmp/out err=$tmp/err
+else
+    out= err=
+fi
+
+# ssh runs in the background. As an asynchronous command of this non-interactive shell it ignores
+# SIGINT and SIGQUIT; the subshell makes it ignore SIGTERM and SIGHUP too (OpenSSH keeps a signal
+# ignored that was ignored at its start), so that a Ctrl-C or a SIGTERM to the process group reaches
+# only this script, which then asks the guest to stop the program and waits for the answer.
+trap '' PIPE
+hsig= sp=
+ssh_run() {   # ssh_run: exec ssh; output to the files of -j or --json, else to this script's own
+    trap '' TERM HUP
+    if [ -n "$out" ]; then exec "${SSH[@]}" "$cmd" >"$out" 2>"$err"; else exec "${SSH[@]}" "$cmd"; fi
+}
+if [ "$stdin" = 0 ] && mkfifo "$tmp/in" 2>/dev/null; then
+    ( ssh_run <"$tmp/in" ) & sp=$!
+    exec 3<>"$tmp/in"    # read-write: the open does not wait for ssh; closing it ends ssh's input
+elif [ "$stdin" = 0 ]; then
+    ( ssh_run </dev/null ) & sp=$!
+else
+    exec 4<&0
+    ( ssh_run <&4 4<&- ) & sp=$!
+    exec 4<&-
+fi
+backstop() {   # backstop SECONDS FLAG: SIGKILL to ssh after SECONDS, if the guest did not answer
+    ( trap 'kill $s 2>/dev/null; exit 0' TERM; sleep "$1" & s=$!; wait $s && { : > "$tmp/$2"; kill -KILL "$sp"; } ) >/dev/null 2>&1 &
+    bps+=" $!"
+}
+bps=
+on_sig() {
+    [ -n "$hsig" ] && return
+    hsig=$1
+    if [ "$stdin" = 0 ]; then echo stop >&3 2>/dev/null; exec 3>&-; backstop 15 sigstop
+    else kill -KILL "$sp" 2>/dev/null; fi
+}
+trap 'on_sig 2' INT; trap 'on_sig 15' TERM; trap 'on_sig 1' HUP
+[ "$tlimit" -gt 0 ] && backstop $((tlimit + 30)) tlimit
+while :; do
+    wait "$sp"; rc=$?
+    kill -0 "$sp" 2>/dev/null || break
+done
+trap - INT TERM HUP
+[ -n "$bps" ] && kill $bps 2>/dev/null
+exec 3>&-
+[ -e "$tmp/tlimit" ] && rc=124
+[ -n "$hsig" ] && rc=$((128 + hsig))
+
+if [ "$json" = 0 ] && [ -z "$junit" ]; then exit "$rc"; fi
+
+# --json and -j: the guest's marker lines (signal, time limit), then the core file
+sig= signame= tlm=0
+if [ "$mk" = 1 ]; then
+    line=$(grep -a '@@qnx-run@@ signal ' "$err" | tail -1)
+    if [ -n "$line" ]; then
+        sig=$(printf '%s' "$line" | sed -n 's/.*@@qnx-run@@ signal \([0-9]*\).*/\1/p')
+        signame=$(printf '%s' "$line" | sed -n 's/.*@@qnx-run@@ signal [0-9]* \([A-Za-z0-9+]*\).*/\1/p')
+        [ -n "$signame" ] && signame=SIG${signame#SIG}
+        sed -i -e '/^@@qnx-run@@ signal /d' -e 's/@@qnx-run@@ signal [0-9]* [A-Za-z0-9+]*$//' "$err"
+    fi
+    if grep -a -q '@@qnx-run@@ time limit$' "$err"; then
+        tlm=1
+        sed -i -e '/^@@qnx-run@@ time limit$/d' -e 's/@@qnx-run@@ time limit$//' "$err"
+    fi
+fi
+# timed out: the guest reported that the -t limit stopped the program, or the guest did not answer
+# and the backstop ended ssh (T+30 s); not a program that exits with 124 by itself
+timed_out=0
+[ -z "$hsig" ] && { [ "$tlm" = 1 ] || [ -e "$tmp/tlimit" ]; } && timed_out=1
+core=
+[ "$json" = 1 ] && case "$signame" in SIGSEGV|SIGBUS|SIGILL|SIGFPE|SIGABRT|SIGQUIT|SIGTRAP|SIGSYS|SIGEMT|SIGXCPU|SIGXFSZ)
+    if [ -n "${QNX_CORE_DIR:-}" ] && [ -d "$QNX_CORE_DIR" ]; then
+        # dumper writes the file after the program has ended: wait until its size stays the same
+        # for 1 s (at most 20 s); prefer PROGRAM.core
+        base=$(basename "$prog") i=0 last=-1
+        while [ $i -lt 20 ]; do
+            core=$(find "$QNX_CORE_DIR" -maxdepth 1 -type f -name "$base.core*" -newer "$tmp/start" 2>/dev/null | head -1)
+            [ -n "$core" ] || core=$(find "$QNX_CORE_DIR" -maxdepth 1 -type f -name '*.core*' -newer "$tmp/start" 2>/dev/null | head -1)
+            sz=-1; [ -n "$core" ] && sz=$(stat -c %s "$core" 2>/dev/null || echo -1)
+            [ "$sz" -gt 0 ] && [ "$sz" = "$last" ] && break
+            last=$sz; sleep 1; i=$((i + 1))
+        done
+        [ -n "$core" ] && core=$(cd "$(dirname "$core")" && pwd -P)/$(basename "$core")
+    fi ;;
+esac
+
+if [ -n "$junit" ]; then
+    [ "$json" = 1 ] || { cat "$out"; cat "$err" >&2; }
+    x() { LC_ALL=C sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g' | LC_ALL=C tr -d '\000-\010\013\014\016-\037'; }
+    tc=${name:-$(basename "$prog")}
+    fails=0; [ "$rc" = 0 ] || fails=1
+    if [ "$timed_out" = 1 ]; then ftype=timeout fmsg="time limit of $tlimit s reached; the program was stopped in the guest"
+    elif [ -n "$hsig" ]; then ftype=stopped fmsg="qnx-run got signal $hsig; the program was stopped in the guest"
+    else ftype=exit-status fmsg="exit status $rc"; fi
+    mkdir -p "$(dirname "$junit")"
+    {
+        echo '<?xml version="1.0" encoding="UTF-8"?>'
+        echo "<testsuites tests=\"1\" failures=\"$fails\" errors=\"0\">"
+        echo "<testsuite name=\"qnx-run\" tests=\"1\" failures=\"$fails\" errors=\"0\" skipped=\"0\">"
+        echo "<testcase classname=\"qnx-run\" name=\"$(printf '%s' "$tc" | x)\">"
+        [ "$rc" = 0 ] || echo "<failure type=\"$ftype\" message=\"$fmsg\">$fmsg</failure>"
+        printf '<system-out>%s</system-out>\n' "$(x < "$out")"
+        printf '<system-err>%s</system-err>\n' "$(x < "$err")"
+        echo '</testcase>'
+        echo '</testsuite>'
+        echo '</testsuites>'
+    } > "$junit" || die "cannot write $junit"
+fi
+
+if [ "$json" = 1 ]; then
+    js() {   # js [text]: JSON string of stdin; bytes that are not UTF-8 and control characters
+             # other than tab and CR are dropped; "text": every line ends with \n, else lines are
+             # joined with \n
+        { iconv -c -f UTF-8 -t UTF-8 2>/dev/null || cat; } | LC_ALL=C tr -d '\000-\010\013\014\016-\037' |
+            LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/\r/\\r/g' |
+            LC_ALL=C awk -v text="${1:-}" 'BEGIN { ORS = ""; printf "\"" }
+                { if (text != "") printf "%s\\n", $0; else printf "%s%s", (NR > 1 ? "\\n" : ""), $0 }
+                END { printf "\"" }'
+    }
+    jv() { if [ -n "$1" ]; then printf '%s' "$1" | js; else printf null; fi; }   # string or null
+    jtext() {   # jtext FILE: "name": text, "name_bytes": N, "name_truncated": bool
+        local n; n=$(wc -c < "$2" | tr -d ' ')
+        printf '"%s":%s,"%s_bytes":%s,"%s_truncated":%s' "$1" "$(tail -c 65536 "$2" | js text)" "$1" "$n" "$1" "$([ "$n" -gt 65536 ] && echo true || echo false)"
+    }
+    hname=; case "$hsig" in 1) hname=SIGHUP ;; 2) hname=SIGINT ;; 15) hname=SIGTERM ;; esac
+    err_msg=; [ "$rc" = 255 ] && err_msg="ssh exit status 255: the guest could not be reached, or the connection ended"
+    printf '{"program":%s,"guest_program":%s,"exit_status":%s,"signal":%s,"signal_name":%s,"timed_out":%s,"time_limit_s":%s,"host_signal":%s,%s,%s,"stdout_file":%s,"stderr_file":%s,"core_file":%s,"junit_file":%s,"error":%s}\n' \
+        "$(jv "$prog")" "$(jv "$gprog")" "$rc" "${sig:-null}" "$(jv "$signame")" \
+        "$([ "$timed_out" = 1 ] && echo true || echo false)" "$tlimit" "$(jv "$hname")" \
+        "$(jtext stdout "$out")" "$(jtext stderr "$err")" "$(jv "$out")" "$(jv "$err")" "$(jv "$core")" "$(jv "$junit")" "$(jv "$err_msg")"
+fi
+exit "$rc"

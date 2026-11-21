@@ -1,0 +1,56 @@
+== ./run.sh linux 
+run.sh: copied libxml2/ (without .git) to SHARE/src/libxml2
+run.sh: Linux reference: cmake -DCMAKE_BUILD_TYPE=Debug -DLIBXML2_WITH_PYTHON=OFF -DLIBXML2_WITH_ICONV=OFF with the lab server's gcc, build folder LINUX_BUILD/libxml2
+== build
+== ctest (Linux)
+Internal ctest changing into directory: LINUX_BUILD/libxml2
+Test project LINUX_BUILD/libxml2
+      Start  1: runtest
+      Start  2: runsuite
+      Start  3: testapi
+      Start  4: testcatalog
+ 1/22 Test  #3: testapi ..........................   Passed
+      Start  5: testchar
+ 2/22 Test  #4: testcatalog ......................   Passed
+      Start  6: testdict
+ 3/22 Test  #2: runsuite .........................   Passed
+      Start  7: testparser
+ 4/22 Test  #5: testchar .........................   Passed
+      Start  8: testrecurse
+ 5/22 Test  #7: testparser .......................   Passed
+      Start  9: scripts_base
+ 6/22 Test  #9: scripts_base .....................   Passed
+      Start 10: scripts_base2
+ 7/22 Test #10: scripts_base2 ....................   Passed
+      Start 11: scripts_long_command
+ 8/22 Test #11: scripts_long_command .............   Passed
+      Start 12: scripts_set1
+ 9/22 Test #12: scripts_set1 .....................   Passed
+      Start 13: scripts_set3
+10/22 Test #13: scripts_set3 .....................   Passed
+      Start 14: scripts_set4
+11/22 Test #14: scripts_set4 .....................   Passed
+      Start 15: scripts_whereis
+12/22 Test #15: scripts_whereis ..................   Passed
+      Start 16: catalogs_catal
+13/22 Test #16: catalogs_catal ...................   Passed
+      Start 17: catalogs_docbook
+14/22 Test #17: catalogs_docbook .................   Passed
+      Start 18: catalogs_recursive
+15/22 Test #18: catalogs_recursive ...............   Passed
+      Start 19: catalogs_registry
+16/22 Test  #8: testrecurse ......................   Passed
+      Start 20: catalogs_whites
+17/22 Test #19: catalogs_registry ................   Passed
+      Start 21: catalogs_whitex
+18/22 Test #20: catalogs_whites ..................   Passed
+      Start 22: catalog_add_del
+19/22 Test #21: catalogs_whitex ..................   Passed
+20/22 Test #22: catalog_add_del ..................   Passed
+21/22 Test  #6: testdict .........................   Passed
+22/22 Test  #1: runtest ..........................   Passed
+
+100% tests passed, 0 tests failed out of 22
+
+run.sh: linux exit status 0
+run.sh: exit status 0; complete output in results/calls/003-linux.txt

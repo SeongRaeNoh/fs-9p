@@ -1,0 +1,241 @@
+# demo/oss-suite.sh, 2026-11-13T03:13:40+09:00, sources sha256 ac061f948768 (tests/srchash.sh): 8 open-source projects, their own test suites on QNX 8.0 (guest) and on Linux (host)
+host: Linux x86_64; host compiler: cc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0; cmake version 3.31.6
+
+== 1. fetch (shallow clone at a tag; nothing is changed in the clones)
+zlib: https://github.com/madler/zlib.git tag v1.3.1, commit 51b7f2a
+libyaml: https://github.com/yaml/libyaml.git tag 0.2.5, commit 2c891fc
+libdeflate: https://github.com/ebiggers/libdeflate.git tag v1.24, commit 96836d7
+utf8proc: https://github.com/JuliaStrings/utf8proc.git tag v2.10.0, commit a1b99da
+check: https://github.com/libcheck/check.git tag 0.15.2, commit 11970a7
+libxml2: https://gitlab.gnome.org/GNOME/libxml2.git tag v2.13.5, commit de918d4
+libxml2-2.15: https://gitlab.gnome.org/GNOME/libxml2.git tag v2.15.4, commit 9649899
+libuv: https://github.com/libuv/libuv.git tag v1.53.0, commit 840404c
+
+== 2. Linux: the same sources built with the host compiler, the same suites run on this host
+zlib: ctest exit status 0; 100% tests passed, 0 tests failed out of 2
+libyaml: ctest exit status 0; 100% tests passed, 0 tests failed out of 2
+libdeflate: ctest exit status 0; 100% tests passed, 0 tests failed out of 8
+utf8proc: ctest exit status 0; 100% tests passed, 0 tests failed out of 9
+check: ctest exit status 0; 100% tests passed, 0 tests failed out of 9
+libxml2: ctest exit status 0; 100% tests passed, 0 tests failed out of 8
+libxml2-2.15: ctest exit status 0; 100% tests passed, 0 tests failed out of 22
+libuv: built; tests registered: 2; tests not run (--build-only)
+
+== 3. QNX: tools/qnx-ci.sh boots the guest, builds every project with qcc, runs each suite in the guest, stops the guest
+== qnx-ci: 8 project(s); ctest -j 4; time limit 1500 s per test (tools/qnx-run -t, a setting; --timeout=N of a project overrides it); coverage off
+== boot the VM: tools/qnx-vm start IMAGE SHARE 22349
+qnx-vm: ready: the guest answers on ssh and /mnt/host is mounted
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+guest: QNX 8.0.0
+core files: the guest's dumper folder /data/var/dumper is a link to /mnt/host/ci/cores (SHARE/ci/cores on the host) during this run
+
+== project 1 of 8: zlib (SHARE/oss-src/zlib); build folder SHARE/ci/zlib, seen as /mnt/host/ci/zlib in the guest
+configure and build with qcc: ok (The C compiler identification is QCC 12.2.0)
+tests registered: 2
+tests started through tools/qnx-run: 2 (2 of them registered without the emulator and changed in the build folder's CTestTestfile.cmake)
+-- ctest --test-dir BUILD -j 4 --timeout 1560 --output-on-failure --output-junit SHARE/oss-results/qnx/zlib.junit.xml
+1/2 Test #1: example ..........................   Passed
+2/2 Test #2: example64 ........................   Passed
+100% tests passed, 0 tests failed out of 2
+ctest exit status 0
+tests started before the first test ended: 2
+JUnit file zlib.junit.xml: 2 test cases, 0 failures, 0 skipped
+
+== project 2 of 8: libyaml (SHARE/oss-src/libyaml); build folder SHARE/ci/libyaml, seen as /mnt/host/ci/libyaml in the guest
+configure and build with qcc: ok (The C compiler identification is QCC 12.2.0)
+tests registered: 2
+tests started through tools/qnx-run: 2 (0 of them registered without the emulator and changed in the build folder's CTestTestfile.cmake)
+-- ctest --test-dir BUILD -j 4 --timeout 1560 --output-on-failure --output-junit SHARE/oss-results/qnx/libyaml.junit.xml
+1/2 Test #1: version ..........................   Passed
+2/2 Test #2: reader ...........................   Passed
+100% tests passed, 0 tests failed out of 2
+ctest exit status 0
+tests started before the first test ended: 2
+JUnit file libyaml.junit.xml: 2 test cases, 0 failures, 0 skipped
+
+== project 3 of 8: libdeflate (SHARE/oss-src/libdeflate); build folder SHARE/ci/libdeflate, seen as /mnt/host/ci/libdeflate in the guest
+CMake options: -DLIBDEFLATE_BUILD_TESTS=ON
+configure and build with qcc: ok (The C compiler identification is QCC 12.2.0)
+tests registered: 8
+tests started through tools/qnx-run: 8 (0 of them registered without the emulator and changed in the build folder's CTestTestfile.cmake)
+-- ctest --test-dir BUILD -j 4 --timeout 1560 --output-on-failure --output-junit SHARE/oss-results/qnx/libdeflate.junit.xml
+1/8 Test #3: test_incomplete_codes ............   Passed
+2/8 Test #2: test_custom_malloc ...............   Passed
+3/8 Test #1: test_checksums ...................   Passed
+4/8 Test #4: test_invalid_streams .............   Passed
+5/8 Test #5: test_litrunlen_overflow ..........   Passed
+6/8 Test #8: test_trailing_bytes ..............   Passed
+7/8 Test #6: test_overread ....................   Passed
+8/8 Test #7: test_slow_decompression ..........   Passed
+100% tests passed, 0 tests failed out of 8
+ctest exit status 0
+tests started before the first test ended: 4
+JUnit file libdeflate.junit.xml: 8 test cases, 0 failures, 0 skipped
+
+== project 4 of 8: utf8proc (SHARE/oss-src/utf8proc); build folder SHARE/ci/utf8proc, seen as /mnt/host/ci/utf8proc in the guest
+CMake options: -DUTF8PROC_ENABLE_TESTING=ON
+configure and build with qcc: ok (The C compiler identification is QCC 12.2.0)
+tests registered: 9
+tests started through tools/qnx-run: 9 (9 of them registered without the emulator and changed in the build folder's CTestTestfile.cmake)
+-- ctest --test-dir BUILD -j 4 --timeout 1560 --output-on-failure --output-junit SHARE/oss-results/qnx/utf8proc.junit.xml
+1/9 Test #1: utf8proc.testcase ................   Passed
+2/9 Test #2: utf8proc.testcustom ..............   Passed
+3/9 Test #3: utf8proc.testiterate .............   Passed
+4/9 Test #4: utf8proc.testmisc ................   Passed
+5/9 Test #5: utf8proc.testprintproperty .......   Passed
+6/9 Test #6: utf8proc.testvalid ...............   Passed
+7/9 Test #7: utf8proc.testcharwidth ...........   Passed
+8/9 Test #8: utf8proc.testgraphemetest ........   Passed
+9/9 Test #9: utf8proc.testnormtest ............   Passed
+100% tests passed, 0 tests failed out of 9
+ctest exit status 0
+tests started before the first test ended: 4
+JUnit file utf8proc.junit.xml: 9 test cases, 0 failures, 0 skipped
+
+== project 5 of 8: check (SHARE/oss-src/check); build folder SHARE/ci/check, seen as /mnt/host/ci/check in the guest
+CMake options: -DCHECK_ENABLE_TIMEOUT_TESTS=OFF -DCMAKE_C_FLAGS=-DHAVE_LIBRT=1 -DHAVE_STRUCT_ITIMERSPEC_IT_VALUE=1
+configure and build with qcc: ok (The C compiler identification is QCC 12.2.0)
+tests registered: 9
+tests started through tools/qnx-run: 2 (0 of them registered without the emulator and changed in the build folder's CTestTestfile.cmake)
+tests left out: 7; their command is not a program of the build folder, so they would run on Linux: test_output.sh test_log_output.sh test_xml_output.sh test_tap_output.sh test_check_nofork.sh test_check_nofork_teardown.sh test_set_max_msg_size.sh
+-- ctest --test-dir BUILD -j 4 --timeout 1560 --output-on-failure --output-junit SHARE/oss-results/qnx/check.junit.xml -E (the tests left out)
+1/2 Test #1: check_check ......................   Passed
+2/2 Test #2: check_check_export ...............   Passed
+100% tests passed, 0 tests failed out of 2
+ctest exit status 0
+tests started before the first test ended: 2
+JUnit file check.junit.xml: 2 test cases, 0 failures, 0 skipped
+
+== project 6 of 8: libxml2 (SHARE/oss-src/libxml2); build folder SHARE/ci/libxml2, seen as /mnt/host/ci/libxml2 in the guest
+CMake options: -DLIBXML2_WITH_PYTHON=OFF -DLIBXML2_WITH_ICONV=OFF -DLIBXML2_WITH_MODULES=OFF
+configure and build with qcc: ok (The C compiler identification is QCC 12.2.0)
+tests registered: 8
+tests started through tools/qnx-run: 8 (0 of them registered without the emulator and changed in the build folder's CTestTestfile.cmake)
+-- ctest --test-dir BUILD -j 4 --timeout 1560 --output-on-failure --output-junit SHARE/oss-results/qnx/libxml2.junit.xml
+1/8 Test #2: runsuite .........................   Passed
+2/8 Test #4: testchar .........................   Passed
+3/8 Test #6: testparser .......................   Passed
+4/8 Test #5: testdict .........................   Passed
+5/8 Test #3: testapi ..........................***Failed
+6/8 Test #8: testThreads ......................   Passed
+7/8 Test #1: runtest ..........................   Passed
+8/8 Test #7: testrecurse ......................   Passed
+88% tests passed, 1 tests failed out of 8
+The following tests FAILED:
+	  3 - testapi (Failed)
+ctest exit status 8
+tests started before the first test ended: 4
+full ctest output (with the failed tests' output): SHARE/ci/libxml2.ctest.txt
+JUnit file libxml2.junit.xml: 8 test cases, 1 failures, 0 skipped
+crashed tests (failed; the guest shell printed "(core dumped)"): 1
+-- testapi: crashed with SIGSEGV; core file testapi.core; first frame in the project: xmlStrVASPrintf at xmlstring.c:625
+   backtrace (ntox86_64-gdb, core file SHARE/ci/cores/testapi.core):
+   Core was generated by `/mnt/host/ci/libxml2/testapi'.
+   Program terminated with signal SIGSEGV, Segmentation fault.
+   [frame in the QNX C library removed]
+   #1-#2 (2 frames outside the project)
+   [frame in the QNX C library removed]
+   #4  xmlStrVASPrintf (out=0x5f9384e518, maxSize=64000, msg=0x3daef62bdd "Can't resolve URI: %s\n", ap=0x5f9384e810) at SHARE/oss-src/libxml2/xmlstring.c:625
+   #5  xmlVSetError (...) at SHARE/oss-src/libxml2/error.c:57
+   #6  xmlVUpdateError (...) at SHARE/oss-src/libxml2/error.c:173
+   #7  xmlVRaiseError (...) at SHARE/oss-src/libxml2/error.c:720
+   #8  xmlCtxtVErr (...) at SHARE/oss-src/libxml2/parserInternals.c:303
+   #9  xmlCtxtErr (...) at SHARE/oss-src/libxml2/parserInternals.c:350
+   #10 xmlWarnMsg (ctxt=0x3daf04c8a0 <C-library data symbol removed>, error=XML_ERR_INVALID_URI, msg=0x3daef62bdd "Can't resolve URI: %s\n", str1=0x0) at SHARE/oss-src/libxml2/SAX2.c:98
+   #11 xmlSAX2ResolveEntity (ctx=0x3daf04c8a0 <C-library data symbol removed>, publicId=0x269b15ad0e "foo", systemId=0x0) at SHARE/oss-src/libxml2/SAX2.c:432
+   #12 xmlSAXParseDTD (sax=0x0, ExternalID=0x269b15ad0e "foo", SystemID=0x0) at SHARE/oss-src/libxml2/parser.c:11942
+   #13 xmlParseDTD (ExternalID=0x269b15ad0e "foo", SystemID=0x0) at SHARE/oss-src/libxml2/parser.c:12025
+   #14 test_xmlParseDTD () at SHARE/oss-src/libxml2/testapi.c:13682
+   #15 test_parser () at SHARE/oss-src/libxml2/testapi.c:15485
+   #16 testlibxml2 () at SHARE/oss-src/libxml2/testapi.c:1256
+   #17 main (argc=1, argv=0x5f9384eaf8) at SHARE/oss-src/libxml2/testapi.c:165
+JUnit file libxml2.junit.xml: backtraces written into the <failure> element of 1 test case(s): 1 found
+
+== project 7 of 8: libxml2-2.15 (SHARE/oss-src/libxml2-2.15); build folder SHARE/ci/libxml2-2.15, seen as /mnt/host/ci/libxml2-2.15 in the guest
+CMake options: -DLIBXML2_WITH_PYTHON=OFF -DLIBXML2_WITH_ICONV=OFF
+configure and build with qcc: ok (The C compiler identification is QCC 12.2.0)
+tests registered: 22
+tests started through tools/qnx-run: 8 (0 of them registered without the emulator and changed in the build folder's CTestTestfile.cmake)
+tests left out: 14; their command is not a program of the build folder, so they would run on Linux: scripts_base scripts_base2 scripts_long_command scripts_set1 scripts_set3 scripts_set4 scripts_whereis catalogs_catal catalogs_docbook catalogs_recursive catalogs_registry catalogs_whites catalogs_whitex catalog_add_del
+-- ctest --test-dir BUILD -j 4 --timeout 1560 --output-on-failure --output-junit SHARE/oss-results/qnx/libxml2-2.15.junit.xml -E (the tests left out)
+1/8 Test #3: testapi ..........................***Failed
+2/8 Test #2: runsuite .........................   Passed
+3/8 Test #4: testcatalog ......................   Passed
+4/8 Test #5: testchar .........................   Passed
+5/8 Test #6: testdict .........................   Passed
+6/8 Test #7: testparser .......................   Passed
+7/8 Test #1: runtest ..........................   Passed
+8/8 Test #8: testrecurse ......................   Passed
+88% tests passed, 1 tests failed out of 8
+The following tests FAILED:
+	  3 - testapi (Failed)
+ctest exit status 8
+tests started before the first test ended: 4
+full ctest output (with the failed tests' output): SHARE/ci/libxml2-2.15.ctest.txt
+JUnit file libxml2-2.15.junit.xml: 8 test cases, 1 failures, 0 skipped
+crashed tests (failed; the guest shell printed "(core dumped)"): 1
+-- testapi: crashed with SIGSEGV; core file testapi.core; first frame in the project: xmlStrVASPrintf at xmlstring.c:589
+   backtrace (ntox86_64-gdb, core file SHARE/ci/cores/testapi.core):
+   Core was generated by `/mnt/host/ci/libxml2-2.15/testapi'.
+   Program terminated with signal SIGSEGV, Segmentation fault.
+   [frame in the QNX C library removed]
+   #1-#2 (2 frames outside the project)
+   [frame in the QNX C library removed]
+   #4  xmlStrVASPrintf (out=0x32ebba67e8, maxSize=64000, msg=0x14291c463a "failed to open %s", ap=0x32ebba6a10) at SHARE/oss-src/libxml2-2.15/xmlstring.c:589
+   #5  xmlVSetError (...) at SHARE/oss-src/libxml2-2.15/error.c:96
+   #6  xmlVUpdateError (...) at SHARE/oss-src/libxml2-2.15/error.c:212
+   #7  xmlVRaiseError (...) at SHARE/oss-src/libxml2-2.15/error.c:718
+   #8  xmlTextReaderErr (code=XML_ERR_ARGUMENT, msg=0x14291c463a "failed to open %s") at SHARE/oss-src/libxml2-2.15/xmlreader.c:196
+   #9  xmlNewTextReaderFilename (URI=0x0) at SHARE/oss-src/libxml2-2.15/xmlreader.c:2104
+   #10 main (argc=1, argv=0x32ebba6b68) at SHARE/oss-src/libxml2-2.15/testapi.c:830
+JUnit file libxml2-2.15.junit.xml: backtraces written into the <failure> element of 1 test case(s): 1 found
+
+== project 8 of 8: libuv (SHARE/oss-src/libuv); build folder SHARE/ci/libuv, seen as /mnt/host/ci/libuv in the guest
+CMake options: -DLIBUV_BUILD_TESTS=ON -DLIBUV_BUILD_BENCH=OFF -DCMAKE_C_STANDARD_LIBRARIES=-lm
+configure and build with qcc: ok (The C compiler identification is QCC 12.2.0)
+tests registered: 2
+tests not run (--build-only)
+
+RESULT: 8 project(s), 39 tests in the QNX guest with ctest, 2 failed; 1 project(s) only built (--build-only); 2 project(s) with a build or test failure; 2 crashed test(s) with a gdb backtrace in the JUnit file
+reports: SHARE/oss-results/qnx/
+
+core files: the guest's dumper folder /data/var/dumper is restored
+
+== stop the VM: tools/qnx-vm stop
+qnx-vm: stopped
+tools/qnx-ci.sh exit status 1
+
+== 4. sources unchanged: tracked files changed in each clone after both runs (zlib's own CMake
+   file renames zconf.h in the source folder when it builds in another folder)
+zlib: 1 (D zconf.h)
+libyaml: 0
+libdeflate: 0
+utf8proc: 0
+check: 0
+libxml2: 0
+libxml2-2.15: 0
+libuv: 0
+
+== 5. table (counts from the JUnit files that ctest wrote; inner cases from the test output in them)
+| project | QNX run | passed | failed | skipped | Linux run | passed | failed | skipped |
+|---|---|---|---|---|---|---|---|---|
+| zlib | 2 | 2 | 0 | 0 | 2 | 2 | 0 | 0 |
+| libyaml | 2 | 2 | 0 | 0 | 2 | 2 | 0 | 0 |
+| libdeflate | 8 | 8 | 0 | 0 | 8 | 8 | 0 | 0 |
+| utf8proc | 9 | 9 | 0 | 0 | 9 | 9 | 0 | 0 |
+| check | 2 | 2 | 0 | 0 | 9 | 9 | 0 | 0 |
+| libxml2 | 8 | 7 | 1 | 0 | 8 | 8 | 0 | 0 |
+| libxml2-2.15 | 8 | 7 | 1 | 0 | 22 | 22 | 0 | 0 |
+| libuv | built, tests not run | - | - | - | built, tests not run | - | - | - |
+
+test cases inside the programs (where the output reports them):
+  check: QNX Check 1808 checks, 326 failures, 14 errors | Linux Check 1810 checks, 338 failures, 16 errors
+total ctest tests: QNX 39 run, 37 passed, 2 failed, 0 skipped; Linux 60 run, 60 passed, 0 failed, 0 skipped
+
+failed on QNX and passed on Linux: 2
+  libxml2: testapi
+  libxml2-2.15: testapi
+
+== 6. CMake cache entries of the QNX builds (options show:NAME of the table)
+libxml2-2.15: LIBXML2_WITH_MODULES:BOOL=ON
+libxml2-2.15: HAVE_DLOPEN:INTERNAL=1

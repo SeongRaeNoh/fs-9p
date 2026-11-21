@@ -1,0 +1,47 @@
+#!/bin/sh
+# fs-9p-supervise - start fs-9p and start it again when a signal ends it (for example slay -9).
+# usage: fs-9p-supervise [fs-9p options]     (do not pass -d; -m must come first if used)
+# The first start is ready when this script returns: it waits until the mountpoint exists. A
+# background loop then keeps fs-9p in the foreground as its child. When fs-9p ends by a signal, the
+# loop prints a line on the console and starts it again after 1 s. When fs-9p exits by itself
+# (exit status 0 after SIGTERM, or 1 when the setup fails, for example without a virtio-9p device),
+# the loop ends. The boot script image/post_start.fs-9p uses it; it is copied to /system/bin.
+# Restart limit: when fs-9p has already been started again FS9P_RESTART_MAX times (default 5) in
+# the last FS9P_RESTART_WINDOW seconds (default 60), the loop prints why and ends, so a driver that
+# dies at every start does not run in a loop. FS9P_RESTART_MAX=0: never start it again. The window
+# uses the shell's SECONDS counter (ksh, the /bin/sh of QNX 8.0); a shell without it makes the
+# limit a total count.
+# Copyright 2026 The fs-9p authors. Licensed under the Apache License, Version 2.0.
+FS9P=${FS9P:-/system/bin/fs-9p}
+MAX=${FS9P_RESTART_MAX:-5}
+WINDOW=${FS9P_RESTART_WINDOW:-60}
+MP=/mnt/host
+[ "${1:-}" = -m ] && MP=$2
+(
+    trap '' HUP
+    n=0
+    times=        # SECONDS value of each restart that is still inside the window
+    while :; do
+        "$FS9P" "$@"
+        st=$?
+        if [ "$st" -le 128 ]; then
+            echo "fs-9p-supervise: fs-9p exit status $st; not started again"
+            exit "$st"
+        fi
+        now=${SECONDS:-0}
+        kept= k=0
+        for t in $times; do
+            if [ $((now - t)) -lt "$WINDOW" ]; then kept="$kept $t"; k=$((k + 1)); fi
+        done
+        times=$kept
+        if [ "$k" -ge "$MAX" ]; then
+            echo "fs-9p-supervise: fs-9p ended by signal $((st - 128)); not started again: $k restarts in the last $WINDOW s (limit FS9P_RESTART_MAX=$MAX in FS9P_RESTART_WINDOW=$WINDOW s)"
+            exit 1
+        fi
+        n=$((n + 1))
+        times="$times $now"
+        echo "fs-9p-supervise: fs-9p ended by signal $((st - 128)); starting it again (restart $n)"
+        sleep 1
+    done
+) </dev/null &
+waitfor "$MP" 10 >/dev/null 2>&1 || echo "fs-9p-supervise: $MP did not appear"

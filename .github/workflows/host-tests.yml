@@ -1,0 +1,19 @@
+# Host-only tests of fs-9p on GitHub Actions: the 9P2000.L codec table test (tests/host/p9_test.c),
+# a fuzz run of the reply parser (tests/host/p9_fuzz.c, 200000 inputs, fixed seed) and the errno
+# table (tests/errno_test.c), built with the runner's gcc, AddressSanitizer and
+# UndefinedBehaviorSanitizer by "make host-check".
+# No QNX SDP is installed or used in this workflow: the SDP licence does not allow the SDP on hosted
+# CI services. The tests in the QNX guest run on a self-hosted machine with tools/qnx-ci.sh.
+name: host-tests
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  host-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: make host-check (gcc, no QNX SDP)
+        run: make host-check HOSTCC=gcc

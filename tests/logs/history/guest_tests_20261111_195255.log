@@ -1,0 +1,289 @@
+# fs-9p guest tests, 2026-11-11T19:52:55+09:00, sources sha256 3a39d7a5dd69 (Makefile src tools tests)
+
+=== build (QNX SDP 8.0, qcc)
+toolchain: Toolchain:  12.2.0	Version:  gcc_ntox86_64
+QEMU: QEMU emulator version 6.2.0 (Debian 1:6.2+dfsg-2ubuntu6.31)
+  mkdir -p build
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build/fs-9p src/fs9p.c src/virtio_pci.c src/virtq.c src/p9.c src/p9_errno.c -lpci
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build/v9p_probe tools/v9p_probe.c src/virtio_pci.c src/virtq.c src/p9.c src/p9_errno.c -lpci
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build/errno_test tests/errno_test.c src/p9_errno.c
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build/attr_test tests/attr_test.c
+PASS: build
+
+=== host test tree in SHARE/tree
+host tree: 191 files, 32 directories, 14M
+big file.bin: 12595257 bytes, md5 f1649094a0f44dbcfdb93c5758017acf
+
+=== guest
+QNX qnxqemu 8.0.0 2026/06/05-16:26:03EDT x86pc x86_64
+uid=0(root) gid=0(root) groups=0(root)
+PASS: copy programs to the guest
+
+=== errno table test (Linux errno in Rlerror -> QNX errno)
+rows ok: 38
+errno_test: 117 table rows, 155 checks, 0 failures
+RESULT: errno table test passed
+PASS: errno table test
+
+=== probe (v9p_probe: Tversion/Rversion exchange, legacy interface, polling)
+Tversion (21 bytes):
+    15 00 00 00 64 ff ff 00 20 00 00 08 00 39 50 32 30 30 30 2e 4c
+9P: Tversion  -> Rversion size=21 tag=0xffff used.len=21
+    reply (21 bytes):
+    15 00 00 00 65 ff ff 00 20 00 00 08 00 39 50 32 30 30 30 2e 4c
+    Rversion msize=8192 version="9P2000.L"
+RESULT: Tversion/Rversion exchange completed
+PASS: probe
+
+=== mount: fs-9p -d -v -m /mnt/host
+exit=0
+PASS: mount
+fs-9p: 9P2000.L, msize 135168, mount tag "hostshare", legacy interface, interrupt-driven
+fs-9p 0.4.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven, 16 request slots)
+total 25184
+-rw-rw-r--  1 qnxuser qnxuser 12595257 2026-11-11 10:52 big file.bin
+-rw-rw-r--  1 qnxuser qnxuser        0 2026-11-11 10:52 empty.txt
+-rw-rw-r--  1 qnxuser qnxuser   135144 2026-11-11 10:52 exactly one read.bin
+drwxrwxr-x  5 qnxuser qnxuser     4096 2026-11-11 10:52 level1 0
+drwxrwxr-x  5 qnxuser qnxuser     4096 2026-11-11 10:52 level1 1
+drwxrwxr-x  5 qnxuser qnxuser     4096 2026-11-11 10:52 level1 2
+drwxrwxr-x  2 qnxuser qnxuser    16384 2026-11-11 10:52 many files
+-rw-rw-r--  1 qnxuser qnxuser        1 2026-11-11 10:52 one byte.txt
+-rw-rw-r--  1 qnxuser qnxuser   135145 2026-11-11 10:52 one read plus 1.bin
+PASS: mode of the mount root is the host folder's mode (drwxrwxr-x)
+
+=== listing: host find vs guest find
+PASS: file list (191 lines equal)
+PASS: directory list (32 lines equal)
+PASS: ls of a 150-entry directory (several readdir calls)
+
+=== content: cksum (CRC and size) of every file, host vs guest
+PASS: cksum of all files (191 lines equal)
+PASS: md5 of big file.bin (12 MiB)
+PASS: read in 7777-byte blocks (dd)
+PASS: tail -c 100000 (lseek from the end)
+PASS: stat size (41337 bytes)
+
+=== missing file
+cat: /mnt/host/tree/no_such_file.txt: No such file or directory
+ls: /mnt/host/tree/no such dir/x: No such file or directory
+PASS: missing file and missing directory give ENOENT
+
+=== two concurrent readers of big file.bin, plus a concurrent find
+f1649094a0f44dbcfdb93c5758017acf  big file.bin
+f1649094a0f44dbcfdb93c5758017acf  big file.bin
+191
+PASS: two concurrent readers give the host md5
+PASS: concurrent find lists all files
+
+=== write operations in SHARE/rw (write, create, mkdir, unlink, rename)
+PASS: create + write + append: host sees 2 lines
+PASS: O_TRUNC rewrite: host sees 'short'
+PASS: cp of the 12 MiB file into the share: host md5 equal
+PASS: mkdir (nested) and a file inside: host sees them
+PASS: rename within a folder and across folders
+PASS: unlink files and rmdir folders: host sees them gone
+mkdir: '/mnt/host/rw/new.txt': File exists
+rmdir: /mnt/host/rw/new.txt: Not a directory
+rm: /mnt/host/rw/missing.txt: No such file or directory
+mv: bad '/mnt/host/rw/missing.txt': No such file or directory
+PASS: error cases: EEXIST, ENOTDIR, ENOENT
+PASS: file made on the host is visible in the guest
+PASS: listing of SHARE/rw after the write tests (3 lines equal)
+
+=== run a program from the share: built on the host with qcc into SHARE/run, started in the guest from /mnt/host/run
+PASS: qcc build into the share
+started from the share with 2 arguments
+status=7
+started from the share with 1 arguments
+status=7
+PASS: guest runs the program from the share (absolute and relative path, exit status 7)
+
+=== attribute operations in SHARE/attr (tests/attr_test.c): fsync, ftruncate, truncate, fchmod, chmod, utime, utimes, chown
+host user who runs QEMU: uid 1000, gid 1000, second group 4
+STEP write_10 rc=0 errno=0 (ok) size=10 mode=644 uid=1000 gid=1000 atime=1794394383 mtime=1794394383
+STEP fsync rc=0 errno=0 (ok) size=10 mode=644 uid=1000 gid=1000 atime=1794394383 mtime=1794394383
+STEP ftruncate_4 rc=0 errno=0 (ok) size=4 mode=644 uid=1000 gid=1000 atime=1794394383 mtime=1794394383
+STEP ftruncate_10000 rc=0 errno=0 (ok) size=10000 mode=644 uid=1000 gid=1000 atime=1794394383 mtime=1794394383
+STEP fstat_size_is_10000 rc=0 errno=0 (ok) size=10000 mode=644 uid=1000 gid=1000 atime=1794394383 mtime=1794394383
+STEP truncate_6000 rc=0 errno=0 (ok) size=6000 mode=644 uid=1000 gid=1000 atime=1794394383 mtime=1794394383
+STEP fchmod_600 rc=0 errno=0 (ok) size=0 mode=600 uid=1000 gid=1000 atime=1794394383 mtime=1794394383
+STEP chmod_640 rc=0 errno=0 (ok) size=0 mode=640 uid=1000 gid=1000 atime=1794394383 mtime=1794394383
+STEP utime_1000000000_1200000000 rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=1000 atime=1000000000 mtime=1200000000
+STEP utimes_1300000000.25_1400000000.5 rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=1000 atime=1300000000 mtime=1400000000
+STEP utime_NULL_now rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=1000 atime=1794394383 mtime=1794394383
+STEP chown_own_ids rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=1000 atime=1794394383 mtime=1794394383
+STEP chgrp_gid2 rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=4 atime=1794394383 mtime=1794394383
+STEP chown_root_refused rc=-1 errno=1 (Operation not permitted) size=0 mode=644 uid=1000 gid=4 atime=1794394383 mtime=1794394383
+STEP chmod_dir_750 rc=0 errno=0 (ok) size=4096 mode=750 uid=1000 gid=1000 atime=1794394383 mtime=1794394383
+RESULT: attr_test done
+PASS: write and fsync return 0
+PASS: ftruncate to 4 and to 10000, truncate to 6000: host size 6000, bytes '0123' then zeros
+PASS: fchmod 600: host mode 600
+PASS: chmod 640: host mode 640, guest stat mode 640
+PASS: chmod of a folder: host mode 750
+PASS: utime: host atime 1000000000, mtime 1200000000
+PASS: utimes with microseconds: host atime 1300000000.250000000, mtime 1400000000.500000000
+PASS: utime(NULL): host mtime is the current host time
+PASS: chown to the host user's ids, chgrp to its group 4: host gid 4
+PASS: chown to root: EPERM from the host, owner unchanged
+
+=== robustness: two concurrent writers to different files
+guest md5: fe309c5f407f2fc47d69900489bda7f4 b7da09b58981c73907b99836beeb6643; host md5: fe309c5f407f2fc47d69900489bda7f4 b7da09b58981c73907b99836beeb6643 
+PASS: two concurrent cp of 24 MiB files: host md5 of both equal
+
+=== robustness: one write() of 100 MiB (dd bs=104857600 count=1)
+c46fc8734823d8c1383451cbfed4f460  /tmp/fs9p_100.bin
+1+0 records in
+1+0 records out
+c46fc8734823d8c1383451cbfed4f460  /mnt/host/robust/big100.bin
+host: 104857600 bytes, md5 c46fc8734823d8c1383451cbfed4f460
+PASS: 100 MiB write: host size 104857600, host md5 equal to the guest's source
+PASS: 100 MiB file read back in the guest: md5 equal
+
+=== robustness: 2,000 small files created, listed, read and removed by the guest
+created=2000
+PASS: 2,000 files: host has 2000 files with the right content
+2000
+2000
+PASS: guest lists 2000 entries and reads 2000 lines
+rm=0
+PASS: rm -r of the 2,000-file folder: gone on the host
+
+=== robustness: path of depth 20 (more than 16 names: two Twalk messages)
+deep
+PASS: mkdir -p of depth 20 and a file at the bottom: host sees it
+PASS: host-made file at depth 20 read in the guest
+PASS: find below d1 lists 22 entries (20 folders, 2 files)
+PASS: rm -r of the depth-20 tree
+
+=== robustness: unmount and mount again, three times
+fs-9p: signal 15, unmounting /mnt/host (97068 9P requests, 2050 Rlerror, 92695 interrupts, 2046 found after unmask, 0 reaped by waiters, 0 lost, at most 3 requests in flight)
+mount1=0
+c46fc8734823d8c1383451cbfed4f460  /mnt/host/robust/big100.bin
+unmounted1
+mount2=0
+c46fc8734823d8c1383451cbfed4f460  /mnt/host/robust/big100.bin
+unmounted2
+mount3=0
+c46fc8734823d8c1383451cbfed4f460  /mnt/host/robust/big100.bin
+unmounted3
+PASS: 3 cycles of mount, md5 of the 100 MiB file, unmount
+
+=== robustness: driver restart while a client holds a file open
+mount=0
+before restart: read from the open fd gave '01234' (status 0)
+after slay -9: ls exit 1
+restart=0
+after restart: read from the old fd: status 1 value ''
+/tmp/fs9p/hold.sh: line 6: 3: Bad file descriptor
+/tmp/fs9p/hold.sh: redirection error: cannot duplicate fd: No such process
+/tmp/fs9p/hold.sh: line 7: 3: Bad file descriptor
+0123456789abcdefghij
+after restart: new open status 0
+/tmp/fs9p/hold.sh: line 11: 4: Bad file descriptor
+after SIGTERM unmount: read from an fd opened before: status 1 value ''
+/tmp/fs9p/hold.sh: redirection error: cannot duplicate fd: No such process
+/tmp/fs9p/hold.sh: line 12: 4: Bad file descriptor
+mount after SIGTERM=0
+0123456789abcdefghij
+PASS: restart with slay -9 while an fd is open: the new instance mounts and serves new opens
+PASS: the fd opened before the restart fails (reported above), no hang
+PASS: SIGTERM unmount with an open fd, then mount again: file readable
+
+=== unmount (SIGTERM)
+ls: /mnt/host: No such file or directory
+fs-9p: signal 15, unmounting /mnt/host (9 9P requests, 0 Rlerror, 8 interrupts, 1 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight)
+PASS: unmount
+
+=== option -p: poll the used ring instead of using the interrupt (fs-9p -d -p)
+exit=0
+fs-9p 0.4.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, polling, 16 request slots)
+PASS: mount with -p: the driver reports polling
+PASS: cksum of all files (polling) (191 lines equal)
+cp=0
+PASS: cp of the 12 MiB file into the share with -p: host md5 equal
+fs-9p: signal 15, unmounting /mnt/host (7471 9P requests, 4 Rlerror, 0 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 2 requests in flight)
+PASS: statistics at unmount with -p: 0 interrupts used
+
+=== option -n 64: 64 request slots, 64 concurrent readers
+exit=0
+VIRTIO: queue 0 size 128
+fs-9p 0.4.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven, 64 request slots)
+PASS: mount with -n 64: 64 request slots
+PASS: 64 concurrent readers of the 12 MiB file: 64 md5 equal to the host's
+fs-9p: signal 15, unmounting /mnt/host (49815 9P requests, 0 Rlerror, 2168 interrupts, 2033 found after unmask, 0 reaped by waiters, 0 lost, at most 42 requests in flight)
+largest number of 9P requests in flight at the same time during this mount: 42 (limit 64)
+PASS: with -n 64 more requests than the default 16 slots were in flight at once (42)
+
+=== two virtio-9p devices at the same time: -a selects by mount tag; share2 is modern-only (1af4:1049)
+exit1=0
+exit2=0
+fs-9p 0.4.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven, 16 request slots)
+fs-9p 0.4.0: mount tag "share2" mounted at /mnt/host2 (9P2000.L, msize 135168, modern interface, interrupt-driven, 16 request slots)
+fs-9p: virtio-9p device 0 is attached by another driver or not usable; skipping it
+PCI: found 1af4:1049 bdf=0x28
+PASS: two instances mounted: -a hostshare at /mnt/host, -a share2 at /mnt/host2
+PASS: -t auto (default) uses the virtio 1.x interface for the modern-only device 1af4:1049
+PASS: the second instance skips the device that the first instance owns (no reset)
+PASS: each mountpoint shows its own host folder
+
+=== write operations over the virtio 1.x interface (device share2, /mnt/host2)
+PASS: modern: create + write + append: host sees 2 lines
+PASS: modern: O_TRUNC rewrite
+PASS: modern: cp of the 12 MiB file from /mnt/host to /mnt/host2: host md5 equal
+PASS: modern: mkdir, rename within and across folders
+PASS: modern: unlink and rmdir
+f1c21517bc861b095e23f493ca0f57b9  /tmp/fs9p_m100.bin
+1+0 records in
+1+0 records out
+PASS: modern: one write() of 100 MiB, host md5 equal
+STEP write_10 rc=0 errno=0 (ok) size=10 mode=644 uid=1000 gid=1000 atime=1794394416 mtime=1794394416
+STEP fsync rc=0 errno=0 (ok) size=10 mode=644 uid=1000 gid=1000 atime=1794394416 mtime=1794394416
+STEP ftruncate_4 rc=0 errno=0 (ok) size=4 mode=644 uid=1000 gid=1000 atime=1794394416 mtime=1794394416
+STEP ftruncate_10000 rc=0 errno=0 (ok) size=10000 mode=644 uid=1000 gid=1000 atime=1794394416 mtime=1794394416
+STEP fstat_size_is_10000 rc=0 errno=0 (ok) size=10000 mode=644 uid=1000 gid=1000 atime=1794394416 mtime=1794394416
+STEP truncate_6000 rc=0 errno=0 (ok) size=6000 mode=644 uid=1000 gid=1000 atime=1794394416 mtime=1794394416
+STEP fchmod_600 rc=0 errno=0 (ok) size=0 mode=600 uid=1000 gid=1000 atime=1794394416 mtime=1794394416
+STEP chmod_640 rc=0 errno=0 (ok) size=0 mode=640 uid=1000 gid=1000 atime=1794394416 mtime=1794394416
+STEP utime_1000000000_1200000000 rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=1000 atime=1000000000 mtime=1200000000
+STEP utimes_1300000000.25_1400000000.5 rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=1000 atime=1300000000 mtime=1400000000
+STEP utime_NULL_now rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=1000 atime=1794394416 mtime=1794394416
+STEP chown_own_ids rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=1000 atime=1794394416 mtime=1794394416
+STEP chgrp_gid2 rc=0 errno=0 (ok) size=0 mode=644 uid=1000 gid=4 atime=1794394416 mtime=1794394416
+STEP chown_root_refused rc=-1 errno=1 (Operation not permitted) size=0 mode=644 uid=1000 gid=4 atime=1794394416 mtime=1794394416
+STEP chmod_dir_750 rc=0 errno=0 (ok) size=4096 mode=750 uid=1000 gid=1000 atime=1794394411 mtime=1794394416
+RESULT: attr_test done
+PASS: modern: attribute test gives the same step results as on the legacy interface (15 lines equal)
+PASS: modern: chmod 640, utime and truncate seen on the host
+fs-9p: signal 15, unmounting /mnt/host (791 9P requests, 0 Rlerror, 755 interrupts, 36 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight)
+fs-9p: signal 15, unmounting /mnt/host2 (1886 9P requests, 28 Rlerror, 1731 interrupts, 155 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight)
+both-unmounted
+PASS: both instances unmounted, 0 lost requests
+PASS: both instances: every completion was found through the interrupt (0 reaped by the 200 ms fallback scan)
+
+=== option -a with a mount tag that no device has
+fs-9p: no virtio-9p device with mount tag "no_such_tag" found
+exit=1
+PASS: -a no_such_tag: error message and exit status 1
+
+=== second mount, read-only, with the virtio 1.x (modern) interface: fs-9p -d -r -t modern
+exit=0
+PASS: mount (modern interface)
+PASS: cksum of all files (modern interface) (191 lines equal)
+PASS: two concurrent readers (modern interface)
+bash: line 1: /mnt/host/tree/new.txt: Read-only file system
+mkdir: '/mnt/host/tree/newdir': Read-only file system
+rm: /mnt/host/tree/empty.txt: Read-only file system
+mv: bad '/mnt/host/tree/empty.txt': Read-only file system
+PASS: read-only mount: write, mkdir, rm, mv give EROFS
+chmod: chmod '/mnt/host/tree/empty.txt' to 0600: Read-only file system
+chown: '/mnt/host/tree/empty.txt' to '0:': Read-only file system
+touch: '/mnt/host/tree/empty.txt': Read-only file system
+PASS: read-only mount: chmod, chown, touch give EROFS
+PASS: host tree unchanged
+ls: /mnt/host: No such file or directory
+fs-9p: signal 15, unmounting /mnt/host (7518 9P requests, 4 Rlerror, 6578 interrupts, 447 found after unmask, 0 reaped by waiters, 0 lost, at most 2 requests in flight)
+PASS: unmount (modern interface)
+
+RESULT: 82 passed, 0 failed

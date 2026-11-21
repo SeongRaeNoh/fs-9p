@@ -1,0 +1,14 @@
+ok 1 - connect to the server's channel
+ok 2 - put a 1000-byte value
+ok 3 - get returns 1000 bytes (got 1000)
+ok 4 - the bytes are the bytes that were put
+ok 5 - put a value of KV_VALUE_MAX (4096) bytes
+ok 6 - get returns the 4096 bytes (got 4096)
+ok 7 - a value of 4097 bytes is refused with E2BIG (rc -1, errno 7)
+ok 8 - count is 2
+ok 9 - stop the server
+9 of 9 checks passed
+exit status 0
+ok 16 - stop the server
+16 of 16 checks passed
+exit status 0

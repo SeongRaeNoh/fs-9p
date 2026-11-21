@@ -1,0 +1,21 @@
+# fs-9p: mount the QEMU host folder (virtio-9p device, mount tag hostshare) at /mnt/host at boot.
+# mkqnximage snippet: tools/make-image.sh copies it to local/snippets/post_start.fs-9p of the image
+# folder; mkqnximage adds it to post_startup.sh, which runs at the end of system start-up.
+# -U qnxuser: after setup fs-9p runs as qnxuser with only the abilities io and priority.
+# fs-9p-supervise starts fs-9p again when a signal ends it (for example slay -9), so /mnt/host comes
+# back without a typed command.
+# Without a virtio-9p device (QEMU started without -fsdev) fs-9p prints an error and boot goes on.
+if [ -x /system/bin/fs-9p ]; then
+    echo "---> Starting fs-9p"
+    if [ -x /system/bin/fs-9p-supervise ]; then
+        /system/bin/fs-9p-supervise -U qnxuser
+    else
+        /system/bin/fs-9p -d -U qnxuser
+    fi
+fi
+# ssh login for tools/qnx-run (image built with SSH_IDENT): if no sshd runs at this point, start it
+# with SshdAuthPath set to the sshd-auth that tools/make-image.sh put into /system/bin.
+if [ -x /system/bin/sshd-auth ] && [ -z "$(pidin -p sshd -F '%a' 2>/dev/null | sed 1d)" ]; then
+    echo "---> Starting sshd (SshdAuthPath /system/bin/sshd-auth)"
+    /system/bin/sshd -f /system/etc/ssh/sshd_config -o SshdAuthPath=/system/bin/sshd-auth
+fi

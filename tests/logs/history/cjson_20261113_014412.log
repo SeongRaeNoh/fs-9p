@@ -1,0 +1,96 @@
+# demo/cjson.sh, 2026-11-13T01:44:12+09:00, sources sha256 352c129bfa44 (tests/srchash.sh): cJSON v1.7.18, its own tests, run in the QNX guest through tools/qnx-run
+guest: QNX 8.0.0
+
+== clone https://github.com/DaveGamble/cJSON.git at tag v1.7.18 (shallow) into WORK/cJSON
+commit: acc7623 add contributors
+
+== change to the clone: register the tests by target name, so that ctest runs them through the emulator
+-    add_test(NAME ${TEST_CJSON} COMMAND "${CMAKE_CURRENT_BINARY_DIR}/${TEST_CJSON}")
++    add_test(NAME ${TEST_CJSON} COMMAND "${TEST_CJSON}")
+-                COMMAND "./${unity_test}")
++                COMMAND "${unity_test}")
+-                    COMMAND "./${cjson_utils_test}")
++                    COMMAND "${cjson_utils_test}")
+lines changed: 3
+
+== build with qcc (CMake toolchain file examples/qnx-unit/qnx-x86_64.cmake; ENABLE_CJSON_UTILS=ON)
+build: ok
+-- The C compiler identification is QCC 12.2.0
+test programs: 22
+libraries: libcjson.pc libcjson.so libcjson.so.1 libcjson.so.1.7.18 libcjson_utils.pc libcjson_utils.so libcjson_utils.so.1 libcjson_utils.so.1.7.18 
+emulator in CTestTestfile.cmake: 22 tests run through tools/qnx-run
+
+== ctest: every test program runs in the QNX guest from WORK/build seen as /mnt/host/...
+ 1/22 Test  #1: cJSON_test .......................   Passed
+ 2/22 Test  #2: parse_examples ...................   Passed
+ 3/22 Test  #3: parse_number .....................   Passed
+ 4/22 Test  #4: parse_hex4 .......................   Passed
+ 5/22 Test  #5: parse_string .....................   Passed
+ 6/22 Test  #6: parse_array ......................   Passed
+ 7/22 Test  #7: parse_object .....................   Passed
+ 8/22 Test  #8: parse_value ......................   Passed
+ 9/22 Test  #9: print_string .....................   Passed
+10/22 Test #10: print_number .....................   Passed
+11/22 Test #11: print_array ......................   Passed
+12/22 Test #12: print_object .....................   Passed
+13/22 Test #13: print_value ......................   Passed
+14/22 Test #14: misc_tests .......................   Passed
+15/22 Test #15: parse_with_opts ..................   Passed
+16/22 Test #16: compare_tests ....................   Passed
+17/22 Test #17: cjson_add ........................   Passed
+18/22 Test #18: readme_examples ..................   Passed
+19/22 Test #19: minify_tests .....................   Passed
+20/22 Test #20: json_patch_tests .................   Passed
+21/22 Test #21: old_utils_tests ..................   Passed
+22/22 Test #22: misc_utils_tests .................   Passed
+100% tests passed, 0 tests failed out of 22
+ctest exit status 0
+Unity test cases in 21 programs: 158, failures 0, ignored 1
+
+== coverage: build again with gcov counters (-O0 -fprofile-arcs -ftest-coverage); the guest writes the .gcda files through the share
+build: ok
+ 1/22 Test  #1: cJSON_test .......................   Passed
+ 2/22 Test  #2: parse_examples ...................   Passed
+ 3/22 Test  #3: parse_number .....................   Passed
+ 4/22 Test  #4: parse_hex4 .......................   Passed
+ 5/22 Test  #5: parse_string .....................   Passed
+ 6/22 Test  #6: parse_array ......................   Passed
+ 7/22 Test  #7: parse_object .....................   Passed
+ 8/22 Test  #8: parse_value ......................   Passed
+ 9/22 Test  #9: print_string .....................   Passed
+10/22 Test #10: print_number .....................   Passed
+11/22 Test #11: print_array ......................   Passed
+12/22 Test #12: print_object .....................   Passed
+13/22 Test #13: print_value ......................   Passed
+14/22 Test #14: misc_tests .......................   Passed
+15/22 Test #15: parse_with_opts ..................   Passed
+16/22 Test #16: compare_tests ....................   Passed
+17/22 Test #17: cjson_add ........................   Passed
+18/22 Test #18: readme_examples ..................   Passed
+19/22 Test #19: minify_tests .....................   Passed
+20/22 Test #20: json_patch_tests .................   Passed
+21/22 Test #21: old_utils_tests ..................   Passed
+22/22 Test #22: misc_utils_tests .................   Passed
+100% tests passed, 0 tests failed out of 22
+ctest exit status 0
+Unity test cases in 21 programs: 158, failures 0, ignored 1
+coverage: 25 .gcda files written by the guest
+
+== coverage of the library code under test (cJSON.c, cJSON_Utils.c): gcovr with the SDP's gcov, over all test programs
+   (cJSON's unit tests compile cJSON.c into each test program with #include; gcovr adds the counts of all programs per source file)
+  File                 Lines      Exec  Cover
+  cJSON.c               1384      1223    88%
+  cJSON_Utils.c          625       561    89%
+  TOTAL                 2009      1784    88%
+  File              Branches     Taken  Cover
+  cJSON.c                922       703    76%
+  cJSON_Utils.c          450       376    83%
+  TOTAL                 1372      1079    78%
+
+== examples from the merged counts of cJSON.c: the first lines that no test executed, and the first executed line with a branch never taken
+  line 142 never executed: return 0;
+  line 202 never executed: return NULL;
+  line 236 never executed: global_hooks.reallocate = realloc;
+  line 135 executed, 1 of its 4 branches never taken: if ((string1 == NULL) || (string2 == NULL))
+
+RESULT: cJSON v1.7.18: 100% tests passed, 0 tests failed out of 22

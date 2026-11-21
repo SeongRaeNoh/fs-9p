@@ -1,0 +1,83 @@
+# examples/ai-agent-session reader scripts, run on QNX 8.0 in QEMU, 2026-11-12T06:28:02+09:00; fs-9p sources sha256 52ee0000bee9 (tests/srchash.sh)
+# env.local: BUILD_HOST set (the QEMU host), IMAGE made by tools/make-image.sh with SSH_IDENT, the project as handed over (bug in place)
+
+$ ./vm_ctl.sh start
+ssh ready
+fs-9p 0.8.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+drwxrwxr-x  2 qnxuser qnxuser 4096 2026-11-11 21:28 /mnt/host
+[exit status 0]
+
+$ ./run_tests.sh
+== configure and build
+[ 33%] Built target kv
+[ 55%] Built target test_basic
+[ 77%] Built target test_large
+[100%] Built target test_stop
+== ctest (each test runs in the QNX guest through tools/qnx-run)
+Test project SHARE/ai_session/build
+    Start 1: test_basic
+1/3 Test #1: test_basic .......................   Passed
+    Start 2: test_large
+2/3 Test #2: test_large .......................***Failed
+ok 1 - connect to the server's channel
+ok 2 - put a 1000-byte value
+not ok 3 - get returns 1000 bytes (got 220)
+ok 4 - the bytes are the bytes that were put
+ok 5 - put a value of KV_VALUE_MAX (4096) bytes
+not ok 6 - get returns the 4096 bytes (got 220)
+not ok 7 - a value of 4097 bytes is refused with E2BIG (rc 0, errno 0)
+not ok 8 - count is 2
+ok 9 - stop the server
+5 of 9 checks passed
+
+    Start 3: test_stop
+3/3 Test #3: test_stop ........................   Passed
+
+67% tests passed, 1 tests failed out of 3
+
+
+The following tests FAILED:
+	  2 - test_large (Failed)
+Errors while running CTest
+[exit status 8]
+
+$ patch -p1 < fix.diff
+patching file src/kvserver.c
+[exit status 0]
+
+$ ./run_tests.sh
+== configure and build
+[ 33%] Built target kv
+[ 55%] Built target test_basic
+[ 77%] Built target test_large
+[100%] Built target test_stop
+== ctest (each test runs in the QNX guest through tools/qnx-run)
+Test project SHARE/ai_session/build
+    Start 1: test_basic
+1/3 Test #1: test_basic .......................   Passed
+    Start 2: test_large
+2/3 Test #2: test_large .......................   Passed
+    Start 3: test_stop
+3/3 Test #3: test_stop ........................   Passed
+
+100% tests passed, 0 tests failed out of 3
+
+[exit status 0]
+
+$ ./qrun.sh build/test_large
+ok 1 - connect to the server's channel
+ok 2 - put a 1000-byte value
+ok 3 - get returns 1000 bytes (got 1000)
+ok 4 - the bytes are the bytes that were put
+ok 5 - put a value of KV_VALUE_MAX (4096) bytes
+ok 6 - get returns the 4096 bytes (got 4096)
+ok 7 - a value of 4097 bytes is refused with E2BIG (rc -1, errno 7)
+ok 8 - count is 2
+ok 9 - stop the server
+9 of 9 checks passed
+exit status 0
+[exit status 0]
+
+$ ./vm_ctl.sh stop
+stopped
+[exit status 0]

@@ -1,0 +1,155 @@
+# fs-9p tests/readme_run.sh, 2026-11-12T04:52:51+09:00, sources sha256 a28ae44bdcd7 (tests/srchash.sh)
+=== blocks from README.md (run unchanged)
+make                                              # 1. build fs-9p with qcc
+tools/make-image.sh "$IMAGE"                      # 2. once: QNX 8.0 image that starts fs-9p at boot
+tools/qnx-vm start "$IMAGE" "$SHARE" "$SSH_PORT"  # 3. boot it in the background with the shared folder
+export QNX_IMAGE="$IMAGE"                         # tools/qnx-run finds the VM's share and port here
+printf '#include <stdio.h>\nint main(void) { puts("hello from QNX"); return 0; }\n' > "$SHARE/hello.c"
+qcc -Vgcc_ntox86_64 -o "$SHARE/hello" "$SHARE/hello.c"
+tools/qnx-run "$SHARE/hello"                      # runs /mnt/host/hello in the guest; output, exit status here
+make -C examples/qnx-unit B="$SHARE/qnx-unit-build" qnx-test   # QNX unit tests in the guest, JUnit files
+
+=== run the blocks
+  make: Nothing to be done for 'all'.
+  Options changed
+  Generating output/build/mount_fs.sh
+  Generating output/build/expandfs.sh
+  Generating output/build/post_startup.sh
+  Generating output/build/start_net.sh
+  Generating output/build/startup.sh
+  Generating output/build/passwd
+  Generating output/build/group
+  Generating output/build/shadow
+  Generating output/build/ifs.build
+  Generating output/build/system.build
+  Generating output/build/data.build
+  Generating output/build/qemu_options
+  Building disk
+  Generating system partition . . .
+  Generating data partition . . .
+  Generating ifs . . .
+  Building boot partition . . .
+  Building disk . . .
+  Target type: qemu
+  Architecture: x86_64
+  Security: no
+  Repositories:
+      
+      <QNX>/qnx800/target/qnx
+  
+  Options with non-default values:
+  
+  
+  For full list of options, run "mkqnximage --options"
+  make-image: image ready in IMAGE/output; start it with: tools/qnx-vm start IMAGE SHARE_FOLDER (background) or tools/qnx-share.sh IMAGE SHARE_FOLDER (console in this terminal)
+  qnx-vm: QEMU started (pid 953767); share SHARE; ssh port 22349
+  qnx-vm: ready: the guest answers on ssh and /mnt/host is mounted
+  fs-9p 0.7.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+  hello from QNX
+  make: Entering directory 'REPO/examples/qnx-unit'
+  mkdir -p SHARE/qnx-unit-build
+  == test_ring (in the QNX guest)
+  ok 1 - empty ring: get fails
+  ok 2 - 8 puts into an empty ring succeed
+  ok 3 - put into a full ring fails
+  ok 4 - gets return the values in order
+  ok 5 - the indexes wrap around correctly
+  5 of 5 checks passed
+  == test_msg (in the QNX guest)
+  ok 1 - default channel: ChannelCreate
+  ok 2 - default channel: server thread at priority 10
+  ok 3 - default channel: ConnectAttach
+  ok 4 - default channel: client thread at priority 30
+  ok 5 - default channel: MsgSend gets the reply "HELLO QNX"
+  ok 6 - default channel: the server thread ran at priority 30 while serving (expected 30)
+  ok 7 - default channel: MsgError(ENOTSUP) reaches the client as errno ENOTSUP
+  ok 8 - fixed-priority channel: ChannelCreate
+  ok 9 - fixed-priority channel: server thread at priority 10
+  ok 10 - fixed-priority channel: ConnectAttach
+  ok 11 - fixed-priority channel: client thread at priority 30
+  ok 12 - fixed-priority channel: MsgSend gets the reply "HELLO QNX"
+  ok 13 - fixed-priority channel: the server thread ran at priority 10 while serving (expected 10)
+  ok 14 - fixed-priority channel: MsgError(ENOTSUP) reaches the client as errno ENOTSUP
+  14 of 14 checks passed
+  == test_pulse (in the QNX guest)
+  ok 1 - channel and connection
+  ok 2 - MsgSendPulse(code 5, value 1234)
+  ok 3 - MsgReceive returns the pulse: rcvid 0, code 5, value 1234
+  ok 4 - queued pulses come out by priority: code 2 (priority 20), then code 1 (priority 10)
+  ok 5 - timer_create with a pulse event
+  ok 6 - timer_settime (one shot)
+  ok 7 - the timer delivers its pulse: code 6, value 77
+  7 of 7 checks passed
+  == exit_status 3 (must return 3)
+  exit_status: stdout line
+  exit_status: stderr line
+  exit status 3 reached make
+  == exit_status 0 with the host path of a file in B (host path argument)
+  exit_status: stderr line
+  exit_status: stdout line
+  exit_status: open /mnt/host/qnx-unit-build/exit_status: ok
+  qnx-test: 0 failed
+  make: Leaving directory 'REPO/examples/qnx-unit'
+PASS: both README blocks ran with exit status 0
+PASS: build/fs-9p and the image (IMAGE/output) exist
+PASS: tools/qnx-vm start returned with the guest ready
+PASS: boot output: fs-9p 0.7.0 mounted the share at /mnt/host
+PASS: tools/qnx-run SHARE/hello: output of the program built on the host, run in the guest
+PASS: make -C examples/qnx-unit qnx-test: unit tests passed in the guest
+
+=== tools/qnx-run: the guest reads and writes the share
+  demo
+  hello
+  hello.c
+  qnx-unit-build
+  readme_check.txt
+  written on the host for the README check
+PASS: guest reads the host file
+PASS: host sees the file written in the guest
+
+=== tools/qnx-run: the running fs-9p is not root and keeps only two abilities
+       pid name                                                                                    uid       euid
+    286741 system/bin/fs-9p                                                                       1000       1000
+                       io  RNL-
+                 priority  RNL-
+PASS: pidin: fs-9p runs with uid 1000 (qnxuser)
+PASS: pidin: 2 abilities for non-root (io, priority), locked
+
+=== slay -9 fs-9p while a file is open: fs-9p-supervise starts it again, no command typed
+  fs-9p has a new process id
+  /mnt/host is back
+  sh: <stdin>[13]: <&3 : bad file descriptor
+  read on the descriptor opened before the kill: status 1
+  written on the host for the README check
+  new process: system/bin/fs-9p                                                                       1000       1000
+PASS: after slay -9 a new fs-9p process mounted /mnt/host again
+PASS: a read on the descriptor opened before the kill fails
+PASS: a new open reads the file
+PASS: the restarted fs-9p runs with uid 1000 too
+  mount lines on the console: 2
+PASS: console: fs-9p-supervise reported signal 9 and restart 1
+
+=== tools/qnx-vm status and stop
+  qnx-vm: running (pid 953767); share SHARE; ssh port 22349
+  qnx-vm: ssh login works; /mnt/host is mounted
+PASS: tools/qnx-vm status: running
+  qnx-vm: stopped
+PASS: tools/qnx-vm stop: QEMU ended
+
+=== serial console, lines of fs-9p and of the boot script
+  ---> Starting slogger2
+  ---> Starting PCI Services
+  ---> Mounting file systems
+  ---> Starting Networking
+  ---> Starting sshd
+  ---> Starting misc
+  ---> Starting fs-9p
+  fs-9p: running as uid 1000 gid 1000; abilities kept for non-root: io, priority
+  fs-9p 0.7.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+  ---> Starting sshd (SshdAuthPath /system/bin/sshd-auth)
+  Startup complete
+  fs-9p-supervise: fs-9p ended by signal 9; starting it again (restart 1)
+  fs-9p: running as uid 1000 gid 1000; abilities kept for non-root: io, priority
+  fs-9p 0.7.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+
+RESULT: 17 passed, 0 failed

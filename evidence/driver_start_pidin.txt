@@ -1,0 +1,26 @@
+# fs-9p guest tests, 2026-11-13, sources sha256 ac061f948768 (tests/srchash.sh)
+=== option -U: after setup fs-9p runs as a non-root user and keeps only the abilities io and priority
+exit=0
+fs-9p: running as uid 1000 gid 1000; abilities kept for non-root: io, priority
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+     pid name                                                                                    uid       euid
+12156956 tmp/fs9p/fs-9p                                                                         1000       1000
+-- threads (priority and scheduling policy, state):
+     pid tid name                         prio STATE          Blocked                     
+12156956   1 tmp/fs9p/fs-9p                10r SIGWAITINFO                                
+12156956   2 tmp/fs9p/fs-9p                10f INTR                                       
+12156956   3 tmp/fs9p/fs-9p                10r RECEIVE        1                           
+12156956   4 tmp/fs9p/fs-9p                10r RECEIVE        1                           
+-- abilities that the non-root set allows:
+                     io  RNL-
+               priority  RNL-
+PASS: mount with -U qnxuser: fs-9p reports uid 1000 after setup
+PASS: pidin: user ID and effective user ID of the running fs-9p are 1000, not 0
+PASS: pidin: the non-root set allows 2 abilities, io and priority, both locked
+PASS: cksum of all files (fs-9p running as 1000) (191 lines equal)
+cp=0
+mv=0
+PASS: write, mkdir and rename with fs-9p running as 1000: host md5 equal
+fs-9p: signal 15, unmounting /mnt/host (7488 9P requests, 6 Rlerror, 7380 interrupts, 108 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 0 waits for a free slot, 0 by a client above every slot owner, highest waiting 0, 0 slots handed over)
+fs-9p: priorities: highest waiting client 10; interrupt thread base 21, raised 0 times, highest 21; set below the base 1 times, lowest 10; 0 priority changes failed
+PASS: unmount of the non-root instance; every completion came through the interrupt, 0 lost

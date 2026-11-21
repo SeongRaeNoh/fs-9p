@@ -1,0 +1,21 @@
+# fs-9p guest tests, 2026-11-13, sources sha256 ac061f948768 (tests/srchash.sh)
+# a program from the share crashes in the guest; the image's dumper writes crash.core through the share; the SDP's ntox86_64-gdb on the host prints the backtrace
+=== core dumps through the share: a program from the share crashes, dumper writes the core file into the share, the SDP's gdb on this machine opens it
+dumper in the image: dumper -U 30:30 -d /data/var/dumper -M 1000 -D cores
+PASS: qcc -g: crash built into the share
+dump folder now: /data/var/dumper -> /mnt/host/cores
+  parse_record() with a NULL record
+  bash: line 23: 2232347 segmentation violation     (core dumped) '/mnt/host/crash/crash' < /dev/null 3>&-
+  exit status 139
+  {"program":"SHARE/crash/crash","guest_program":"/mnt/host/crash/crash","exit_status":139,"signal":11,"signal_name":"SIGSEGV","timed_out":false,"time_limit_s":0,"host_signal":null,"stdout":"parse_record() with a NULL record\n","stdout_bytes":34,"stdout_truncated":false,"stderr":"bash: line 23: 2232347 segmentation violation     (core dumped) '/mnt/host/crash/crash' < /dev/null 3>&-\n","stderr_bytes":105,"stderr_truncated":false,"stdout_file":"REPO/tests/work/crash_out/stdout.txt","stderr_file":"REPO/tests/work/crash_out/stderr.txt","core_file":"SHARE/cores/crash.core","junit_file":null,"error":null}
+crash json ok
+dump folder restored: drwx------ /data/var/dumper
+files in SHARE/cores on the host: crash.core 
+PASS: tools/qnx-run: the program ended with SIGSEGV, exit status 139 (128 + 11) on the host
+PASS: dumper wrote crash.core through the share into the host folder
+PASS: qnx-run --json with QNX_CORE_DIR: signal 11, signal_name SIGSEGV (named by the guest), core_file = SHARE/cores/crash.core
+  Program terminated with signal SIGSEGV, Segmentation fault.
+  #0  read_value (p=0x0) at SHARE/crash/crash.c:2
+  #1  parse_record (p=0x0) at SHARE/crash/crash.c:3
+  #2  main (argc=1, argv=0x3af2a22b78) at SHARE/crash/crash.c:9
+PASS: ntox86_64-gdb on this machine: bt of the core file shows read_value, parse_record, main with source lines

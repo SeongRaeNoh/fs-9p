@@ -1,0 +1,72 @@
+# fs-9p tests/quickstart_test.sh, 2026-11-12T14:38:08+09:00, sources sha256 1180d3fa0c6d (tests/srchash.sh)
+=== setup: overlay on the image disk, ssh key for this check, fs-9p build
+PASS: qcow2 overlay created (the image disk is only read)
+PASS: make: build/fs-9p
+
+=== boot 1: the Quick Start image without fs-9p; ssh key added on the serial console
+PASS: boot 1: login prompt on the serial console
+PASS: serial console: logged in as root, ssh key added, root key login allowed
+  guest: QNX 8.0.0
+PASS: ssh as root with the key
+  before: absent
+  before: no-fs-9p
+PASS: before: no /mnt/host and no /system/bin/fs-9p in the image
+
+=== tools/add-to-quickstart.sh (run twice)
+  add-to-quickstart: copied fs-9p and fs-9p-supervise to /system/bin/
+  add-to-quickstart: /system/etc/startup/post_startup.sh now starts fs-9p at boot (lines 121-128)
+  add-to-quickstart: restart the VM with the virtio-9p device (see docs/usage.md, "Quick Start Target Image")
+  exit status 0
+  add-to-quickstart: copied fs-9p and fs-9p-supervise to /system/bin/
+  add-to-quickstart: /system/etc/startup/post_startup.sh now starts fs-9p at boot (lines 121-128)
+  add-to-quickstart: restart the VM with the virtio-9p device (see docs/usage.md, "Quick Start Target Image")
+  exit status 0
+PASS: add-to-quickstart.sh: exit status 0, twice
+  1
+  exit 0
+  -rwxr-xr-x  1 root root 264264 2026-11-12 05:38 /system/bin/fs-9p
+  -rwxr-xr-x  1 root root   2328 2026-11-12 05:38 /system/bin/fs-9p-supervise
+PASS: post_startup.sh: one fs-9p block, before the final exit 0
+PASS: fs-9p and fs-9p-supervise in /system/bin
+  block: # fs-9p begin (added by tools/add-to-quickstart.sh; remove with tools/add-to-quickstart.sh --remove)
+  block: # Mount the QEMU host folder (virtio-9p device, mount tag hostshare) at /mnt/host; fs-9p-supervise
+  block: # starts fs-9p again when a signal ends it.
+  block: if [ -x /system/bin/fs-9p-supervise ] && [ -x /system/bin/fs-9p ]; then
+  block:     echo "---> Starting fs-9p"
+  block:     /system/bin/fs-9p-supervise -U qnxuser
+  block: fi
+  block: # fs-9p end
+
+=== boot 2: tools/qnx-vm start with QNX_DISK (the same overlay)
+  qnx-vm: QEMU started (pid 2675171); share SHARE; ssh port 22349
+  qnx-vm: ready: the guest answers on ssh and /mnt/host is mounted
+  fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+  exit status 0
+PASS: boot 2: /mnt/host mounted at boot, no command typed
+PASS: boot 2: console line of fs-9p 0.10.0
+  written on the host for the Quick Start check
+  exit status 0
+PASS: qnx-run cat: the guest reads a host file through /mnt/host
+       pid name                                                                                    uid       euid
+    671772 system/bin/fs-9p                                                                       1000       1000
+PASS: pidin: fs-9p runs as uid 1000 (qnxuser)
+  fs-9p has a new process id
+  /mnt/host is back
+PASS: slay -9: fs-9p-supervise started fs-9p again and /mnt/host is back
+  console: ---> Starting fs-9p
+  console: fs-9p: running as uid 1000 gid 1000; abilities kept for non-root: io, priority
+  console: fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+  console: fs-9p-supervise: fs-9p ended by signal 9; starting it again (restart 1)
+  console: fs-9p: running as uid 1000 gid 1000; abilities kept for non-root: io, priority
+  console: fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+PASS: console: the boot block started fs-9p; fs-9p-supervise reported restart 1
+
+=== tools/add-to-quickstart.sh --remove
+  add-to-quickstart: stopped the running fs-9p (SIGTERM)
+  add-to-quickstart: removed /system/bin/fs-9p and /system/bin/fs-9p-supervise
+  add-to-quickstart: removed the fs-9p block from /system/etc/startup/post_startup.sh
+  exit status 0
+PASS: --remove: post_startup.sh has the md5 it had before, the two programs are gone
+  qnx-vm: stopped
+
+RESULT: 16 passed, 0 failed

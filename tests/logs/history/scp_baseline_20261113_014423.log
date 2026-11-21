@@ -1,0 +1,32 @@
+# demo/scp-baseline.sh, 2026-11-13T01:44:23+09:00, sources sha256 352c129bfa44 (tests/srchash.sh): cJSON v1.7.18 through demo/scp-run.sh (scp, no shared folder)
+
+== clone https://github.com/DaveGamble/cJSON.git at tag v1.7.18 (shallow) into WORK/cJSON; WORK is outside the shared folder
+commit: acc7623 add contributors
+lines changed (as in demo/cjson.sh): 3
+
+== build with qcc; emulator demo/scp-run.sh with LD_LIBRARY_PATH=WORK/build
+build: ok
+test programs: 22
+
+== ctest: each test program is copied into the guest and run there
+100% tests passed, 0 tests failed out of 22
+ctest exit status 0
+
+== coverage build (-O0 -fprofile-arcs -ftest-coverage); emulator demo/scp-run.sh --coverage
+build: ok
+100% tests passed, 0 tests failed out of 22
+ctest exit status 0
+coverage: 25 .gcda files in WORK/build-cov, all copied back by the runner
+  cJSON.c               1384      1223    88%
+  cJSON_Utils.c          625       561    89%
+  TOTAL                 2009      1784    88%
+
+== counts (one line per file or path in the runner's log; plain run and coverage run of the 22 tests)
+scp runner, plain run: copied into the guest 76 files (programs 22, shared libraries 25, data files 29; 53 different host files); copied back 0 files (.gcda 0, core files 0); paths translated 68
+scp runner, coverage run: copied into the guest 76 files (programs 22, shared libraries 25, data files 29; 53 different host files); copied back 68 files (.gcda 68, core files 0); paths translated 136
+paths translated, by kind (both runs): cwd 44, program 44, gcda 68, data 4, LD_LIBRARY_PATH 44
+reports copied back: 0 (ctest writes its JUnit file on the host from the program's output; the Unity tests write no report file)
+core files: 0 (no test crashed)
+fs-9p (tools/qnx-run, demo/cjson.sh on the same tests): 0 files copied into the guest and 0 copied back; tools/qnx-run has no copy step and translates host paths with one rule (shared folder -> /mnt/host)
+
+RESULT: scp baseline, cJSON v1.7.18: plain run 100% tests passed, 0 tests failed out of 22; coverage run 100% tests passed, 0 tests failed out of 22

@@ -1,0 +1,159 @@
+# make host-check HOSTCC=gcc, 2026-11-13T02:45:56+09:00, sources sha256 ac061f948768 (tests/srchash.sh): host-only tests of the 9P codec and the errno table, without the QNX SDP
+host: Linux x86_64; gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+mkdir -p build/host
+gcc -O1 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -o build/host/p9_test tests/host/p9_test.c tests/host/fake_virtq.c src/p9_errno.c -lpthread
+gcc -O1 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -o build/host/p9_fuzz tests/host/p9_fuzz.c tests/host/fake_virtq.c src/p9_errno.c -lpthread
+gcc -O1 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -o build/host/errno_test tests/errno_test.c src/p9_errno.c
+build/host/p9_test
+== 1. requests: bytes of each T-message
+ok   Tversion  request bytes as specified (21 bytes, size field 21, call returned 0)
+ok   Tattach   request bytes as specified (24 bytes, size field 24, call returned 0)
+ok   Twalk     request bytes as specified (24 bytes, size field 24, call returned 0)
+ok   Tlopen    request bytes as specified (15 bytes, size field 15, call returned 0)
+ok   Tlcreate  request bytes as specified (26 bytes, size field 26, call returned 0)
+ok   Tread     request bytes as specified (23 bytes, size field 23, call returned 5)
+ok   Twrite    request bytes as specified (26 bytes, size field 26, call returned 3)
+ok   Tclunk    request bytes as specified (11 bytes, size field 11, call returned 0)
+ok   Tgetattr  request bytes as specified (19 bytes, size field 19, call returned 0)
+ok   Tsetattr  request bytes as specified (67 bytes, size field 67, call returned 0)
+ok   Treaddir  request bytes as specified (23 bytes, size field 23, call returned 51)
+ok   Tmkdir    request bytes as specified (22 bytes, size field 22, call returned 0)
+ok   Tunlinkat request bytes as specified (18 bytes, size field 18, call returned 0)
+ok   Trenameat request bytes as specified (21 bytes, size field 21, call returned 0)
+ok   Tfsync    request bytes as specified (15 bytes, size field 15, call returned 0)
+ok   Treadlink request bytes as specified (11 bytes, size field 11, call returned 6)
+ok   Tsymlink  request bytes as specified (21 bytes, size field 21, call returned 0)
+ok   Tstatfs   request bytes as specified (11 bytes, size field 11, call returned 0)
+== 2. valid replies: decoded fields
+ok   Rversion: 9P2000.L, msize 8192
+ok   Rattach: qid (dir, 1, 0x100), root fid 1
+ok   Rwalk: 2 qids, last qid path 0x201, 2 names walked
+ok   Rlopen: qid path 0x201, iounit 4096
+ok   Rlcreate: qid path 0x300, iounit 0
+ok   Rread: 5 bytes "hello"
+ok   Rwrite: count 3
+ok   Rgetattr: all 16 decoded fields
+ok   Rgetattr with btime, gen, data_version after ctime: accepted
+ok   Rreaddir: 51 bytes of entries
+ok   Rreaddir data: entries "." (dir, offset 1) and "ab" (file, offset 2), then end
+ok   Rmkdir: qid path 0x400
+ok   Rreadlink: "target", NUL-terminated
+ok   Rsymlink: qid type symlink, path 0x500
+ok   Rstatfs: all 9 fields
+ok   Rclunk (empty body): accepted
+ok   Rsetattr (empty body): accepted
+ok   Runlinkat (empty body): accepted
+ok   Rrenameat (empty body): accepted
+ok   Rfsync (empty body): accepted
+== 3. malformed replies
+ok   no answer from the device: -EIO (got -5)
+ok   reply of 6 bytes (less than the 7-byte header): -EIO (got -5)
+ok   size field 8 > 7 bytes written: -EIO (got -5)
+ok   size field 6 < header size 7: -EIO (got -5)
+ok   device wrote 2 bytes after the message (size 7): accepted, extra bytes ignored (got 0)
+ok   Rgetattr type in answer to Tclunk: -EIO (got -5)
+ok   Rlerror 2 (Linux ENOENT): -ENOENT (got -2)
+ok   Rlerror 13 (Linux EACCES): -EACCES (got -13)
+ok   Rlerror 9999 (not a Linux errno): -EIO (got -5)
+ok   Rlerror with a 2-byte body (ecode needs 4): -EIO (got -5)
+ok   Rread count 5 for a Tread of 4 bytes: -EIO (got -5)
+ok   Rread count 5 with 3 data bytes: -EIO (got -5)
+ok   Rread count 0xfffffffc (offset + count wraps in 32 bits): -EIO (got -5)
+ok   Rreaddir count 0xffffffff with no data: -EIO (got -5)
+ok   Rwrite count 4 for a Twrite of 3 bytes: -EIO (got -5)
+ok   Rread with a 2-byte body (count needs 4): -EIO (got -5)
+ok   Rwalk with 3 qids for 2 names: -EIO, 0 names reported as walked (got -5, 0)
+ok   Rwalk with 1 qid for 2 names: -ENOENT, 1 name walked, qid of the first (got -2, 1)
+ok   Rwalk with 0 qids for 2 names: -ENOENT, 0 names walked (got -2)
+ok   Rversion "9P2000" (not 9P2000.L): -EPROTO (got -71)
+ok   Rversion msize 4095 (< 4096): -EPROTO (got -71)
+ok   Rreadlink of 6 bytes into a 6-byte buffer (no room for NUL): -ENAMETOOLONG (got -36)
+ok   Rreadlink of 6 bytes into a 7-byte buffer: 6 (got 6)
+ok   directory entry whose name length passes the end: -1, position unchanged
+ok   directory entry cut after 13 bytes: -1
+ok   empty directory data: 0 (end)
+== 4. truncated replies: every proper prefix of each valid body
+ok   Rversion  every proper prefix of the 14-byte body (14 prefixes) gives -EIO
+ok   Rattach   every proper prefix of the 13-byte body (13 prefixes) gives -EIO
+ok   Rwalk     every proper prefix of the 28-byte body (28 prefixes) gives -EIO
+ok   Rlopen    every proper prefix of the 17-byte body (17 prefixes) gives -EIO
+ok   Rlcreate  every proper prefix of the 17-byte body (17 prefixes) gives -EIO
+ok   Rread     every proper prefix of the 9-byte body (9 prefixes) gives -EIO
+ok   Rwrite    every proper prefix of the 4-byte body (4 prefixes) gives -EIO
+ok   Rgetattr  every proper prefix of the 121-byte body (121 prefixes) gives -EIO
+ok   Rreaddir  every proper prefix of the 55-byte body (55 prefixes) gives -EIO
+ok   Rmkdir    every proper prefix of the 13-byte body (13 prefixes) gives -EIO
+ok   Rreadlink every proper prefix of the 8-byte body (8 prefixes) gives -EIO
+ok   Rsymlink  every proper prefix of the 13-byte body (13 prefixes) gives -EIO
+ok   Rstatfs   every proper prefix of the 60-byte body (60 prefixes) gives -EIO
+== 5. walks of more than 16 names, msize, long requests, fid pool
+ok   walk of 20 names: 2 Twalk messages (16 + 4), the second from newfid to newfid; last qid path 203
+ok   walk of 20 names, second Twalk stops after 2: -ENOENT, 18 walked, then Tclunk of newfid 2
+ok   Rversion msize 65536 for a request of 8192: msize 8192 (got 8192)
+ok   Rversion msize 4096 for a request of 8192: msize 4096 (got 4096)
+ok   Tread of 100000 bytes with msize 4096: count field 4072
+ok   Tmkdir with a 200-byte name and msize 64: -ENAMETOOLONG, nothing sent (got -36)
+ok   fid pool: 1, 2, 3; 2 released and given out again; then 4; P9_NOFID is not taken back
+p9_test: 84 checks, 0 failures
+RESULT: 9P codec table test passed
+build/host/p9_fuzz -runs=200000 -seed=1
+p9_fuzz: 200000 inputs (seed 1): 149753 mutated valid replies, 50247 random bodies; built with AddressSanitizer and UndefinedBehaviorSanitizer
+call       accepted   rejected
+version        1160      12114
+attach         8100       5243
+walk           4692       8724
+lopen          8003       5453
+lcreate        7970       5418
+read           2501      10765
+write          1164      12041
+getattr        6721       6629
+readdir        4779       8597
+mkdir          8043       5173
+readlink       3695       9710
+symlink        8052       5210
+statfs         7535       6097
+walk20         4879       8388
+dirent        13144          0
+RESULT: fuzz run passed (no sanitizer report, no broken invariant)
+build/host/errno_test
+ok   linux    1 EPERM                  -> qnx   1 "Operation not permitted"
+ok   linux    2 ENOENT                 -> qnx   2 "No such file or directory"
+ok   linux    5 EIO                    -> qnx   5 "Input/output error"
+ok   linux    9 EBADF                  -> qnx   9 "Bad file descriptor"
+ok   linux   11 EAGAIN                 -> qnx  11 "Resource temporarily unavailable"
+ok   linux   12 ENOMEM                 -> qnx  12 "Cannot allocate memory"
+ok   linux   13 EACCES                 -> qnx  13 "Permission denied"
+ok   linux   16 EBUSY                  -> qnx  16 "Device or resource busy"
+ok   linux   17 EEXIST                 -> qnx  17 "File exists"
+ok   linux   18 EXDEV                  -> qnx  18 "Invalid cross-device link"
+ok   linux   20 ENOTDIR                -> qnx  20 "Not a directory"
+ok   linux   21 EISDIR                 -> qnx  21 "Is a directory"
+ok   linux   22 EINVAL                 -> qnx  22 "Invalid argument"
+ok   linux   24 EMFILE                 -> qnx  24 "Too many open files"
+ok   linux   27 EFBIG                  -> qnx  27 "File too large"
+ok   linux   28 ENOSPC                 -> qnx  28 "No space left on device"
+ok   linux   30 EROFS                  -> qnx  30 "Read-only file system"
+ok   linux   31 EMLINK                 -> qnx  31 "Too many links"
+ok   linux   34 ERANGE                 -> qnx  34 "Numerical result out of range"
+ok   linux   35 EDEADLK                -> qnx  35 "Resource deadlock avoided"
+ok   linux   36 ENAMETOOLONG           -> qnx  36 "File name too long"
+ok   linux   37 ENOLCK                 -> qnx  37 "No locks available"
+ok   linux   38 ENOSYS                 -> qnx  38 "Function not implemented"
+ok   linux   39 ENOTEMPTY              -> qnx  39 "Directory not empty"
+ok   linux   40 ELOOP                  -> qnx  40 "Too many levels of symbolic links"
+ok   linux   61 ENODATA                -> qnx  61 "No data available"
+ok   linux   71 EPROTO                 -> qnx  71 "Protocol error"
+ok   linux   75 EOVERFLOW              -> qnx  75 "Value too large for defined data type"
+ok   linux   84 EILSEQ                 -> qnx  84 "Invalid or incomplete multibyte or wide character"
+ok   linux   95 ENOTSUP                -> qnx  95 "Operation not supported"
+ok   linux  110 ETIMEDOUT              -> qnx 110 "Connection timed out"
+ok   linux  116 ESTALE                 -> qnx 116 "Stale file handle"
+ok   linux  122 EDQUOT                 -> qnx 122 "Disk quota exceeded"
+ok   linux  125 ECANCELED              -> qnx 125 "Operation canceled"
+ok   linux    0 unknown 0 -> EIO       -> qnx   5 "Input/output error"
+ok   linux   58 unused 58 -> EIO       -> qnx   5 "Input/output error"
+ok   linux 9999 unknown 9999 -> EIO    -> qnx   5 "Input/output error"
+ok   strerror(map(2)) = "No such file or directory"
+errno_test: 131 table rows, 169 checks, 0 failures
+RESULT: errno table test passed
+make host-check exit status 0

@@ -1,0 +1,5 @@
+# fs-9p guest tests, 2026-11-13, sources sha256 ac061f948768 (tests/srchash.sh)
+=== guest
+QNX qnxqemu 8.0.0 2026/06/05-16:26:03EDT x86pc x86_64
+uid=0(root) gid=0(root) groups=0(root)
+PASS: copy programs to the guest

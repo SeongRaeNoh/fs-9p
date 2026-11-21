@@ -1,0 +1,87 @@
+# demo/ci.sh, 2026-11-13T01:46:47+09:00, sources sha256 352c129bfa44 (tests/srchash.sh): tools/qnx-ci.sh on examples/qnx-unit and cJSON v1.7.18
+
+== clone https://github.com/DaveGamble/cJSON.git at tag v1.7.18 (shallow) into SHARE/ci-src/cJSON
+commit: acc7623 add contributors
+== change to the clone (as in demo/cjson.sh): register the tests by target name
+lines changed: 3
+
+== tools/qnx-ci.sh IMAGE SHARE examples/qnx-unit SHARE/ci-src/cJSON -DENABLE_CJSON_UTILS=ON -DENABLE_CJSON_TEST=ON --filter=.../cJSON.c --filter=.../cJSON_Utils.c
+== qnx-ci: 2 project(s); ctest -j 1 (coverage on: one test at a time); time limit 300 s per test (tools/qnx-run -t, a setting; --timeout=N of a project overrides it); coverage on
+== boot the VM: tools/qnx-vm start IMAGE SHARE 22349
+qnx-vm: ready: the guest answers on ssh and /mnt/host is mounted
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+guest: QNX 8.0.0
+core files: the guest's dumper folder /data/var/dumper is a link to /mnt/host/ci/cores (SHARE/ci/cores on the host) during this run
+
+== project 1 of 2: qnx-unit (REPO/examples/qnx-unit); build folder SHARE/ci/qnx-unit, seen as /mnt/host/ci/qnx-unit in the guest
+configure and build with qcc: ok (The C compiler identification is QCC 12.2.0)
+tests registered: 5
+tests started through tools/qnx-run: 5 (0 of them registered without the emulator and changed in the build folder's CTestTestfile.cmake)
+-- ctest --test-dir BUILD -j 1 --timeout 360 --output-on-failure --output-junit SHARE/ci/results/qnx-unit.junit.xml
+1/5 Test #1: test_ring ........................   Passed
+2/5 Test #2: test_msg .........................   Passed
+3/5 Test #3: test_pulse .......................   Passed
+4/5 Test #4: runner_exit_status ...............   Passed
+5/5 Test #5: runner_host_path_argument ........   Passed
+100% tests passed, 0 tests failed out of 5
+ctest exit status 0
+tests started before the first test ended: 1
+JUnit file qnx-unit.junit.xml: 5 test cases, 0 failures, 0 skipped
+-- coverage: 4 .gcda files written by the guest into the build folder; gcovr with ntox86_64-gcov
+lines: 100.0% (92 out of 92)
+branches: 59.2% (58 out of 98)
+files in qnx-unit.coverage.txt (lines: total, executed, percent):
+  tests/exit_status.c               9      9  100%
+  tests/test_msg.c                 43     43  100%
+  tests/test_pulse.c               24     24  100%
+  tests/test_ring.c                16     16  100%
+  TOTAL                            92     92  100%
+
+== project 2 of 2: cJSON (SHARE/ci-src/cJSON); build folder SHARE/ci/cJSON, seen as /mnt/host/ci/cJSON in the guest
+CMake options: -DENABLE_CJSON_UTILS=ON -DENABLE_CJSON_TEST=ON
+configure and build with qcc: ok (The C compiler identification is QCC 12.2.0)
+tests registered: 22
+tests started through tools/qnx-run: 22 (0 of them registered without the emulator and changed in the build folder's CTestTestfile.cmake)
+-- ctest --test-dir BUILD -j 1 --timeout 360 --output-on-failure --output-junit SHARE/ci/results/cJSON.junit.xml
+ 1/22 Test  #1: cJSON_test .......................   Passed
+ 2/22 Test  #2: parse_examples ...................   Passed
+ 3/22 Test  #3: parse_number .....................   Passed
+ 4/22 Test  #4: parse_hex4 .......................   Passed
+ 5/22 Test  #5: parse_string .....................   Passed
+ 6/22 Test  #6: parse_array ......................   Passed
+ 7/22 Test  #7: parse_object .....................   Passed
+ 8/22 Test  #8: parse_value ......................   Passed
+ 9/22 Test  #9: print_string .....................   Passed
+10/22 Test #10: print_number .....................   Passed
+11/22 Test #11: print_array ......................   Passed
+12/22 Test #12: print_object .....................   Passed
+13/22 Test #13: print_value ......................   Passed
+14/22 Test #14: misc_tests .......................   Passed
+15/22 Test #15: parse_with_opts ..................   Passed
+16/22 Test #16: compare_tests ....................   Passed
+17/22 Test #17: cjson_add ........................   Passed
+18/22 Test #18: readme_examples ..................   Passed
+19/22 Test #19: minify_tests .....................   Passed
+20/22 Test #20: json_patch_tests .................   Passed
+21/22 Test #21: old_utils_tests ..................   Passed
+22/22 Test #22: misc_utils_tests .................   Passed
+100% tests passed, 0 tests failed out of 22
+ctest exit status 0
+tests started before the first test ended: 1
+JUnit file cJSON.junit.xml: 22 test cases, 0 failures, 0 skipped
+-- coverage: 25 .gcda files written by the guest into the build folder; gcovr with ntox86_64-gcov
+lines: 88.8% (1784 out of 2009)
+branches: 78.6% (1079 out of 1372)
+files in cJSON.coverage.txt (lines: total, executed, percent):
+  cJSON.c                        1384   1223   88%
+  cJSON_Utils.c                   625    561   89%
+  TOTAL                          2009   1784   88%
+
+RESULT: 2 project(s), 27 tests in the QNX guest with ctest, 0 failed
+reports: SHARE/ci/results/
+
+core files: the guest's dumper folder /data/var/dumper is restored
+
+== stop the VM: tools/qnx-vm stop
+qnx-vm: stopped
+tools/qnx-ci.sh exit status 0

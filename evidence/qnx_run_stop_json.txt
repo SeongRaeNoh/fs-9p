@@ -1,0 +1,91 @@
+# fs-9p guest tests, 2026-11-13, sources sha256 ac061f948768 (tests/srchash.sh)
+# tools/qnx-run stops the guest program (time limit -t, SIGINT and SIGTERM to qnx-run, ctest TIMEOUT), its --json result line, and the command block of AGENTS.md run as written
+=== tools/qnx-run stops the guest program: time limit (-t), SIGINT and SIGTERM to qnx-run, ctest TIMEOUT
+  stuck_receive: a process waits in MsgReceive()
+  stuck_receive: a process waits in MsgReceive()
+  exit status 124
+PASS: qnx-run -t 3: exit status 124; the program and its child (2 processes in MsgReceive) were stopped, 0 left in the guest when qnx-run returned
+  stuck_receive: a process waits in MsgReceive()
+  stuck_receive: a process waits in MsgReceive()
+  bash: line 23: 9699355 kill                       '/mnt/host/qnx-unit/build/stuck_receive' 'ignore-term' 'fork' < /dev/null 3>&-
+  exit status 124
+PASS: qnx-run -t 3, program ignores SIGTERM: SIGKILL 2 s after SIGTERM; exit status 124, 0 left
+  stuck_receive: a process waits in MsgReceive()
+  stuck_receive: a process waits in MsgReceive()
+  exit status 124
+  uid of the stuck_receive processes while they waited: 1000 
+PASS: qnx-run -t 3 -u qnxuser: the program and its child ran as uid 1000 (not root); exit status 124, 0 left
+  stuck_receive: a process waits in MsgReceive()
+  stuck_receive: a process waits in MsgReceive()
+  exit status 130
+PASS: SIGINT to qnx-run while the program waits: exit status 130; qnx-run returned after the guest had stopped both processes (0 left)
+  stuck_receive: a process waits in MsgReceive()
+  stuck_receive: a process waits in MsgReceive()
+  exit status 143
+PASS: SIGTERM to qnx-run while the program waits: exit status 143; qnx-run returned after the guest had stopped both processes (0 left)
+  cmake exit status 0
+  Test project SHARE/qnx-unit/cbuild-timeout
+      Start 6: runner_timeout
+  1/1 Test #6: runner_timeout ...................***Timeout
+  
+  0% tests passed, 1 tests failed out of 1
+  
+  
+  The following tests FAILED:
+  	  6 - runner_timeout (Timeout)
+  Errors while running CTest
+  Output from these tests are in: SHARE/qnx-unit/cbuild-timeout/Testing/Temporary/LastTest.log
+  Use "--rerun-failed --output-on-failure" to re-run the failed cases verbosely.
+  ctest exit status 8
+PASS: ctest TIMEOUT 5 (test runner_timeout = stuck_receive fork): ctest reported Timeout and ended qnx-run; the guest then stopped both processes (0 left; checked once a second, at most 10 times)
+
+=== tools/qnx-run --json: one JSON line with the exit status, signal, time limit, output and output files
+  {"program":"SHARE/qnx-unit/build/exit_status","guest_program":"/mnt/host/qnx-unit/build/exit_status","exit_status":3,"signal":null,"signal_name":null,"timed_out":false,"time_limit_s":60,"host_signal":null,"stdout":"exit_status: stdout line\n","stdout_bytes":25,"stdout_truncated":false,"stderr":"exit_status: stderr line\n","stderr_bytes":25,"stderr_truncated":false,"stdout_file":"REPO/tests/work/j1out/stdout.txt","stderr_file":"REPO/tests/work/j1out/stderr.txt","core_file":null,"junit_file":null,"error":null}
+  exit status 3
+  {"program":"SHARE/qnx-unit/build/stuck_receive","guest_program":"/mnt/host/qnx-unit/build/stuck_receive","exit_status":124,"signal":null,"signal_name":null,"timed_out":true,"time_limit_s":2,"host_signal":null,"stdout":"stuck_receive: a process waits in MsgReceive()\n","stdout_bytes":47,"stdout_truncated":false,"stderr":"","stderr_bytes":0,"stderr_truncated":false,"stdout_file":"REPO/tests/work/j2out/stdout.txt","stderr_file":"REPO/tests/work/j2out/stderr.txt","core_file":null,"junit_file":null,"error":null}
+  exit status 124
+  {"program":"SHARE/qnx-unit/build/exit_status","guest_program":"/mnt/host/qnx-unit/build/exit_status","exit_status":124,"signal":null,"signal_name":null,"timed_out":false,"time_limit_s":0,"host_signal":null,"stdout":"exit_status: stdout line\n","stdout_bytes":25,"stdout_truncated":false,"stderr":"exit_status: stderr line\n","stderr_bytes":25,"stderr_truncated":false,"stdout_file":"REPO/tests/work/j3out/stdout.txt","stderr_file":"REPO/tests/work/j3out/stderr.txt","core_file":null,"junit_file":null,"error":null}
+  exit status 124
+  {"program":"SHARE/qnx-unit/build/exit_status","guest_program":"/mnt/host/qnx-unit/build/exit_status","exit_status":124,"signal":null,"signal_name":null,"timed_out":false,"time_limit_s":60,"host_signal":null,"stdout":"exit_status: stdout line\n","stdout_bytes":25,"stdout_truncated":false,"stderr":"exit_status: stderr line\n","stderr_bytes":25,"stderr_truncated":false,"stdout_file":"REPO/tests/work/j4out/stdout.txt","stderr_file":"REPO/tests/work/j4out/stderr.txt","core_file":null,"junit_file":"tests/work/j4.xml","error":null}
+  exit status 124
+json1 ok
+json2 ok
+json3 ok
+PASS: qnx-run --json, program exits with 3: valid JSON; exit_status 3, signal null, timed_out false, stdout and stderr lines; stdout_file holds the same text
+PASS: qnx-run --json -t 2 on stuck_receive: exit_status 124, timed_out true (reported by the guest), its output line; 0 left in the guest
+PASS: qnx-run --json, program exits with 124 by itself: timed_out false without -t and with -t 60; the JUnit file (-j) names an exit-status failure, not a timeout
+
+=== AGENTS.md: the commands of its marked block, run as written from the repository root
+    B=$QNX_SHARE/agent-build                         # build folder inside the share
+    make -C examples/qnx-unit B="$B"                 # build the example's tests with qcc on the host
+    tools/qnx-run --json -t 60 "$B/test_ring"        # one test in the guest: one JSON line on stdout
+    tools/qnx-run --json -t 60 "$B/exit_status" 3    # a failing program: "exit_status":3
+    tools/qnx-run --json -t 3 "$B/stuck_receive"     # a hung program: stopped, "timed_out":true
+    cmake -S examples/qnx-unit -B "$B/cmake" -DCMAKE_TOOLCHAIN_FILE="$PWD/examples/qnx-unit/qnx-x86_64.cmake" \
+          -DCMAKE_CROSSCOMPILING_EMULATOR="$PWD/tools/qnx-run;-t;60"
+    cmake --build "$B/cmake"
+    ctest --test-dir "$B/cmake" --output-junit junit.xml   # all tests in the guest; JUnit in $B/cmake/junit.xml
+  mkdir -p SHARE/agent-build
+  {"program":"SHARE/agent-build/test_ring","guest_program":"/mnt/host/agent-build/test_ring","exit_status":0,"signal":null,"signal_name":null,"timed_out":false,"time_limit_s":60,"host_signal":null,"stdout":"ok 1 - empty ring: get fails\nok 2 - 8 puts into an empty ring succeed\nok 3 - put into a full ring fails\nok 4 - gets return the values in order\nok 5 - the indexes wrap around correctly\n5 of 5 checks passed\n","stdout_bytes":205,"stdout_truncated":false,"stderr":"","stderr_bytes":0,"stderr_truncated":false,"stdout_file":"REPO/tests/work/agtmp/qnx-run.3QJTEx/stdout.txt","stderr_file":"REPO/tests/work/agtmp/qnx-run.3QJTEx/stderr.txt","core_file":null,"junit_file":null,"error":null}
+  {"program":"SHARE/agent-build/exit_status","guest_program":"/mnt/host/agent-build/exit_status","exit_status":3,"signal":null,"signal_name":null,"timed_out":false,"time_limit_s":60,"host_signal":null,"stdout":"exit_status: stdout line\n","stdout_bytes":25,"stdout_truncated":false,"stderr":"exit_status: stderr line\n","stderr_bytes":25,"stderr_truncated":false,"stdout_file":"REPO/tests/work/agtmp/qnx-run.HpxT6c/stdout.txt","stderr_file":"REPO/tests/work/agtmp/qnx-run.HpxT6c/stderr.txt","core_file":null,"junit_file":null,"error":null}
+  {"program":"SHARE/agent-build/stuck_receive","guest_program":"/mnt/host/agent-build/stuck_receive","exit_status":124,"signal":null,"signal_name":null,"timed_out":true,"time_limit_s":3,"host_signal":null,"stdout":"stuck_receive: a process waits in MsgReceive()\n","stdout_bytes":47,"stdout_truncated":false,"stderr":"","stderr_bytes":0,"stderr_truncated":false,"stdout_file":"REPO/tests/work/agtmp/qnx-run.Wu84rh/stdout.txt","stderr_file":"REPO/tests/work/agtmp/qnx-run.Wu84rh/stderr.txt","core_file":null,"junit_file":null,"error":null}
+  Internal ctest changing into directory: SHARE/agent-build/cmake
+  Test project SHARE/agent-build/cmake
+      Start 1: test_ring
+  1/5 Test #1: test_ring ........................   Passed
+      Start 2: test_msg
+  2/5 Test #2: test_msg .........................   Passed
+      Start 3: test_pulse
+  3/5 Test #3: test_pulse .......................   Passed
+      Start 4: runner_exit_status
+  4/5 Test #4: runner_exit_status ...............   Passed
+      Start 5: runner_host_path_argument
+  5/5 Test #5: runner_host_path_argument ........   Passed
+  
+  100% tests passed, 0 tests failed out of 5
+  
+json lines 3
+checks ok
+PASS: AGENTS.md block: three JSON lines (test_ring exit_status 0; exit_status 3; stuck_receive timed_out true, 124)
+PASS: AGENTS.md block: ctest with tools/qnx-run -t 60 as emulator, 5 of 5 passed in the guest, junit.xml with 5 tests
+PASS: AGENTS.md block: no stuck_receive left in the guest

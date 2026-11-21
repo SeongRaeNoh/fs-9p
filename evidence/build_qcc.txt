@@ -1,0 +1,13 @@
+# fs-9p guest tests, 2026-11-13, sources sha256 ac061f948768 (tests/srchash.sh)
+=== build (QNX SDP 8.0, qcc)
+toolchain: Toolchain:  12.2.0	Version:  gcc_ntox86_64
+QEMU: QEMU emulator version 6.2.0 (Debian 1:6.2+dfsg-2ubuntu6.31)
+host OS: Ubuntu 22.04.5 LTS
+  mkdir -p build
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build/fs-9p src/fs9p.c src/virtio_pci.c src/virtq.c src/p9.c src/p9_errno.c -lpci
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build/v9p_probe tools/v9p_probe.c src/virtio_pci.c src/virtq.c src/p9.c src/p9_errno.c -lpci
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build/errno_test tests/errno_test.c src/p9_errno.c
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build/attr_test tests/attr_test.c
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build/link_test tests/link_test.c
+  qcc -Vgcc_ntox86_64 -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 -o build/writers_test tests/writers_test.c
+PASS: build

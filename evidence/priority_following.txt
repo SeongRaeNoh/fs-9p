@@ -1,0 +1,125 @@
+# fs-9p guest tests, 2026-11-13, sources sha256 ac061f948768 (tests/srchash.sh)
+# interrupt-thread priority: fixed (-f) and following the client (default) under CPU load; a client below the base priority; a client above the unprivileged maximum with -U and -U -P; a reader at 40 that waits for the one request slot (-n 1) held by a reader at 10 (default, -w, -f). Counts and priorities only, no times; "fallback wait": a waiting server thread looks at the ring itself every 200 ms (a constant in src/virtq.c, not a measurement)
+=== interrupt-thread priority under CPU load: 8 CPU-bound loops at priority 30, a reader at priority 40; base priority 21, fixed (-f) and following the client (default)
+guest processors: 4
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, fixed), 16 request slots)
+cff21fcb3b594abcb299ae32541ff5d5  -
+loops that had ended when the read finished: 0 of 8
+fs-9p: signal 15, unmounting /mnt/host (27 9P requests, 0 Rlerror, 3 interrupts, 0 found after unmask, 24 reaped by waiters, 0 lost, at most 1 requests in flight; 0 waits for a free slot, 0 by a client above every slot owner, highest waiting 0, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 0 times, highest 21; set below the base 0 times, lowest 21; 0 priority changes failed
+PASS: reader at priority 40 under load at 30 (fs-9p -f): md5 of the first 2 MiB equal to the host's
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+cff21fcb3b594abcb299ae32541ff5d5  -
+loops that had ended when the read finished: 0 of 8
+fs-9p: signal 15, unmounting /mnt/host (27 9P requests, 0 Rlerror, 27 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 0 waits for a free slot, 0 by a client above every slot owner, highest waiting 0, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 24 times, highest 40; set below the base 1 times, lowest 10; 0 priority changes failed
+PASS: reader at priority 40 under load at 30 (fs-9p ): md5 of the first 2 MiB equal to the host's
+PASS: mount lines: base priority 21; fixed with -f, following by default
+completions collected by the fallback wait instead of the interrupt thread: 24 with -f, 0 by default (fallback wait: a waiting server thread that has no completion after 200 ms, a constant in src/virtq.c, checks the ring itself)
+highest waiting client priority: 40 with -f, 40 by default; highest interrupt-thread priority: 21 with -f, 40 by default
+PASS: with -f the interrupt thread stays at 21 and the load at 30 delays it (24 fallback completions)
+PASS: by default the interrupt thread follows the reader to priority 40: 0 fallback completions, 0 failed priority changes
+
+=== a client below the base priority: reader at priority 8; base priority 21, fixed (-f) and following the client (default)
+cff21fcb3b594abcb299ae32541ff5d5  -
+fs-9p: priorities: highest waiting client 10; interrupt thread base 21, raised 0 times, highest 21; set below the base 0 times, lowest 21; 0 priority changes failed
+PASS: reader at priority 8 (fs-9p -f): md5 of the first 2 MiB equal to the host's
+cff21fcb3b594abcb299ae32541ff5d5  -
+fs-9p: priorities: highest waiting client 10; interrupt thread base 21, raised 0 times, highest 21; set below the base 2 times, lowest 8; 0 priority changes failed
+PASS: reader at priority 8 (fs-9p ): md5 of the first 2 MiB equal to the host's
+interrupt thread set below the base: 0 times with -f (lowest 21), 2 times by default (lowest 8)
+PASS: with -f the interrupt thread never goes below 21
+PASS: by default the interrupt thread goes down to the reader's priority 8 (2 changes below the base)
+
+=== a client above the maximum priority for unprivileged processes: fs-9p -U qnxuser, reader (root) at priority 70, 8 loops at 65
+fs-9p: running as uid 1000 gid 1000; abilities kept for non-root: io, priority
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+cff21fcb3b594abcb299ae32541ff5d5  -
+loops that had ended when the read finished: 0 of 8
+fs-9p: signal 15, unmounting /mnt/host (27 9P requests, 0 Rlerror, 27 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 0 waits for a free slot, 0 by a client above every slot owner, highest waiting 0, 0 slots handed over)
+fs-9p: priorities: highest waiting client 70; interrupt thread base 21, raised 24 times, highest 70; set below the base 1 times, lowest 10; 0 priority changes failed
+PASS: reader at priority 70 under load at 65 (fs-9p -U qnxuser): md5 of the first 2 MiB equal to the host's
+fs-9p: running as uid 1000 gid 1000; abilities kept for non-root: io
+fs-9p 0.10.0: mount tag "hostshare" mounted at /mnt/host (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 16 request slots)
+cff21fcb3b594abcb299ae32541ff5d5  -
+loops that had ended when the read finished: 8 of 8
+fs-9p: signal 15, unmounting /mnt/host (27 9P requests, 0 Rlerror, 27 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 0 waits for a free slot, 0 by a client above every slot owner, highest waiting 0, 0 slots handed over)
+fs-9p: priorities: highest waiting client 63; interrupt thread base 21, raised 24 times, highest 63; set below the base 1 times, lowest 10; 0 priority changes failed
+PASS: reader at priority 70 under load at 65 (fs-9p -U qnxuser -P): md5 of the first 2 MiB equal to the host's
+-U: highest waiting client 70, interrupt thread highest 70, 0 failed changes, 0 fallback completions, 0 of 8 loops ended before the read finished
+-U -P: highest waiting client 63, interrupt thread highest 63, 0 failed changes, 8 of 8 loops ended before the read finished
+PASS: start-up lines: -U keeps io and priority, -U -P keeps only io
+PASS: with the priority ability the non-root fs-9p serves the client at 70: interrupt thread raised to 70, 0 failed changes, 0 fallback completions, the read finished while all 8 loops still ran
+PASS: without it (-P) the pool thread ran at 63, below the loops, and the read finished only after 8 of 8 loops had ended (more than 8 minus 4 processors)
+
+=== a reader at priority 40 waits for the request slot that a reader at 10 holds: fs-9p -n 1 on the device with throttled reads (mount tag slow); default, -w (no priority inheritance through the slots, as in 0.9.0) and -f
+VQ: 1 slots, 135168 bytes per buffer, interrupt-driven, a thread that waits for a slot raises the slot's owner (priority-inheritance mutex per slot)
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 1 request slots)
+     pid tid name                         prio STATE          Blocked                     
+13901852   2 tmp/fs9p/fs-9p                40f INTR                                       
+13901852   4 tmp/fs9p/fs-9p                40r MUTEX          (0x3531adc438) 13901852-05 #
+13901852   5 tmp/fs9p/fs-9p                40r CONDVAR        (0x3531adc430)              
+13926430   1 proc/boot/dd                  10r REPLY          13901852                    
+13946909   1 proc/boot/dd                  40r REPLY          13901852                    
+--
+     pid tid name                         prio STATE          Blocked                     
+13901852   2 tmp/fs9p/fs-9p                40f INTR                                       
+13901852   3 tmp/fs9p/fs-9p                40r MUTEX          (0x3531adc438) 13901852-05 #
+13901852   5 tmp/fs9p/fs-9p                40r CONDVAR        (0x3531adc430)              
+13926430   1 proc/boot/dd                  10r REPLY          13901852                    
+14012448   1 proc/boot/dd                  40r REPLY          13901852                    
+--
+     pid tid name                         prio STATE          Blocked                     
+13901852   2 tmp/fs9p/fs-9p                40f INTR                                       
+13901852   4 tmp/fs9p/fs-9p                40r MUTEX          (0x3531adc438) 13901852-05 #
+13901852   5 tmp/fs9p/fs-9p                40r CONDVAR        (0x3531adc430)              
+13926430   1 proc/boot/dd                  10r REPLY          13901852                    
+14086173   1 proc/boot/dd                  40r REPLY          13901852                    
+--
+reads at 40 during which pidin showed a thread of fs-9p blocked on a slot mutex: 3 of 3
+fs-9p: signal 15, unmounting /mnt/slow (63 9P requests, 0 Rlerror, 63 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 41 waits for a free slot, 9 by a client above every slot owner, highest waiting 40, 41 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 48 times, highest 40; set below the base 21 times, lowest 10; 0 priority changes failed
+VQ: 1 slots, 135168 bytes per buffer, interrupt-driven, no priority inheritance through the slots
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 1 request slots)
+reads at 40 during which pidin showed a thread of fs-9p blocked on a slot mutex: 0 of 3
+fs-9p: signal 15, unmounting /mnt/slow (63 9P requests, 0 Rlerror, 63 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 40 waits for a free slot, 20 by a client above every slot owner, highest waiting 40, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 27 times, highest 40; set below the base 21 times, lowest 10; 0 priority changes failed
+VQ: 1 slots, 135168 bytes per buffer, interrupt-driven, a thread that waits for a slot raises the slot's owner (priority-inheritance mutex per slot)
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 1 request slots)
+pidin 1 s after the reader at 40 started:
+     pid tid name                         prio STATE          Blocked                     
+24215580   2 tmp/fs9p/fs-9p                21f INTR                                       
+24215580   5 tmp/fs9p/fs-9p                10r READY                                      
+loops that had ended when the read at 40 finished: 0 of 8
+68be25a0655640158f3c0f594a411434  -
+fs-9p: signal 15, unmounting /mnt/slow (47 9P requests, 0 Rlerror, 47 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 1 waits for a free slot, 1 by a client above every slot owner, highest waiting 40, 1 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 12 times, highest 40; set below the base 2 times, lowest 10; 0 priority changes failed
+VQ: 1 slots, 135168 bytes per buffer, interrupt-driven, no priority inheritance through the slots
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, set to the highest waiting client), 1 request slots)
+pidin 1 s after the reader at 40 started:
+     pid tid name                         prio STATE          Blocked                     
+24567836   2 tmp/fs9p/fs-9p                10f READY                                      
+24567836   4 tmp/fs9p/fs-9p                10r READY                                      
+24567836   5 tmp/fs9p/fs-9p                40r CONDVAR        (0x397743ce08)              
+loops that had ended when the read at 40 finished: 8 of 8
+68be25a0655640158f3c0f594a411434  -
+fs-9p: signal 15, unmounting /mnt/slow (47 9P requests, 0 Rlerror, 47 interrupts, 0 found after unmask, 1 reaped by waiters, 0 lost, at most 1 requests in flight; 14 waits for a free slot, 7 by a client above every slot owner, highest waiting 40, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 11 times, highest 40; set below the base 8 times, lowest 10; 0 priority changes failed
+VQ: 1 slots, 135168 bytes per buffer, interrupt-driven, no priority inheritance through the slots
+fs-9p 0.10.0: mount tag "slow" mounted at /mnt/slow (9P2000.L, msize 135168, legacy interface, interrupt-driven (interrupt thread priority 21, fixed), 1 request slots)
+pidin 1 s after the reader at 40 started:
+     pid tid name                         prio STATE          Blocked                     
+24920092   2 tmp/fs9p/fs-9p                21f READY                                      
+24920092   4 tmp/fs9p/fs-9p                40r CONDVAR        (0x48691d9e08)              
+24920092   5 tmp/fs9p/fs-9p                10r READY                                      
+loops that had ended when the read at 40 finished: 8 of 8
+68be25a0655640158f3c0f594a411434  -
+fs-9p: signal 15, unmounting /mnt/slow (47 9P requests, 0 Rlerror, 47 interrupts, 0 found after unmask, 0 reaped by waiters, 0 lost, at most 1 requests in flight; 20 waits for a free slot, 10 by a client above every slot owner, highest waiting 40, 0 slots handed over)
+fs-9p: priorities: highest waiting client 40; interrupt thread base 21, raised 0 times, highest 21; set below the base 0 times, lowest 21; 0 priority changes failed
+part A, reads at 40 during which a thread of fs-9p waited on a slot mutex: 3 of 3 by default, 0 of 3 with -w; by default the waiting thread / the slot's owner ran at 40r/40r
+part B, loops that had ended when the read at 40 finished: 0 of 8 by default, 8 with -w, 8 with -f (guest processors: 4)
+part B, waits for a free slot by a client above every slot owner: 1 by default, 7 with -w, 10 with -f; slots handed over: 1, 0, 0; fallback completions: 0, 1, 0
+PASS: part A: by default the reader-at-40's server thread waited on the slot's mutex and the slot's owner ran at 40 (pidin: 40r/40r); with -w no thread waited on a slot mutex
+PASS: part B by default: the reader at 40 waited for the slot of the reader at 10 (1 waits above every owner, 1 slots handed over), the interrupt thread was raised to 40, and the read (md5 equal) ended while all 8 loops at 30 still ran
+PASS: part B with -w (0.9.0 behaviour): the reader at 40 waited for the slot of the reader at 10, and its read ended only after 8 of 8 loops had ended (more than 8 minus 4 processors)
+PASS: part B with -f: the read at 40 ended only after 8 of 8 loops had ended
