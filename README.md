@@ -5,6 +5,8 @@ Set `CMAKE_CROSSCOMPILING_EMULATOR` to `tools/qnx-run`, and ctest, make and git 
 host run each test program on the QNX kernel; the guest writes coverage counters and core files
 into the host build folder. No copy step, and no hosted CI, which the SDP licence rules out.
 
+Video (2 min 37 s): https://youtu.be/AuPv2jGAMnA
+
 ![Left: the host shell builds hello.c with qcc into the shared folder, edits it and builds again. Right: a shell on the QNX 8.0 guest (over ssh) runs each new build from /mnt/host and writes result.txt, which the host reads.](docs/loop.gif)
 
 *Build on the host (left), run in the guest (right): a real terminal recording ([how it was made](docs/video_script.md#readme-picture)).*
@@ -115,20 +117,8 @@ This repository contains no QNX SDP files (headers, libraries, binaries or image
 
 ## How this was built
 
-An AI coding agent (Claude Code, by Anthropic) wrote and tested the code, the tests and this README
-under the direction of the entrant, with QNX API information from the public QNX 8.0 documentation,
-the device interface from the virtio 1.2 specification and the protocol from the 9P2000.L message
-descriptions; `qcc` compiles the code against the headers of QNX SDP 8.0. A feature counted as done
-only when a guest test checked it and passed; these tests found the problems listed in
-[docs/internals.md](docs/internals.md#problems-found-and-how-they-were-solved). Reviews by further AI
-agents led to the changes of versions 0.4.0 to 0.10.0 (boot-time start, privilege drop, priority
-following, `tools/qnx-run`, automatic restart, the Quick Start image script, coverage through the
-share, symbolic links, the cJSON run, core files through the share, time limits and JSON results in
-`tools/qnx-run`, the scp comparison, priority inheritance through the request slots,
-`tools/qnx-ci.sh`); the review
-reports are not part of the repository.
-
-<!-- ENTRANT-ROLE: written by the entrant before submission -->
+An AI coding agent (Claude Code, by Anthropic) wrote and tested the code, the tests and this README.
+I solved the problems in a question-and-answer dialogue with the coding agent.
 
 ## Licence
 
